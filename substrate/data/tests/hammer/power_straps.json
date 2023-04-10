@@ -1,0 +1,163 @@
+[
+    {
+        "macro": [
+            {
+                "layer": "M4",
+                "direction": "horizontal",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 864,
+                "spacing": 288,
+                "group_pitch": 10752,
+                "offset": 3056,
+                "inst_paths": [
+                    "pass/macro",
+                    "pass/macro_on_pitch"
+                ],
+                "inst_orientations": [
+                    "r0",
+                    "r0"
+                ]
+            },
+            {
+                "layer": "M5",
+                "direction": "vertical",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 864,
+                "spacing": 288,
+                "group_pitch": 10752,
+                "inst_paths": [
+                    "pass/macro",
+                    "pass/macro_on_pitch"
+                ],
+                "inst_orientations": [
+                    "r0",
+                    "r0"
+                ]
+            }
+        ]
+    },
+    {
+        "macro_1": [
+            {
+                "layer": "M4",
+                "direction": "horizontal",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 864,
+                "spacing": 288,
+                "group_pitch": 10752,
+                "offset": 5312,
+                "inst_paths": [
+                    "pass/misaligned_macro"
+                ],
+                "inst_orientations": [
+                    "r0"
+                ]
+            },
+            {
+                "layer": "M5",
+                "direction": "vertical",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 864,
+                "spacing": 288,
+                "group_pitch": 10752,
+                "inst_paths": [
+                    "pass/misaligned_macro"
+                ],
+                "inst_orientations": [
+                    "r0"
+                ]
+            }
+        ]
+    },
+    {
+        "macro_2": [
+            {
+                "layer": "M5",
+                "direction": "vertical",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 864,
+                "spacing": 288,
+                "group_pitch": 10752,
+                "offset": 3808,
+                "inst_paths": [
+                    "pass/macro_bad_top_layer"
+                ],
+                "inst_orientations": [
+                    "r0"
+                ]
+            },
+            {
+                "layer": "M5",
+                "direction": "vertical",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 864,
+                "spacing": 288,
+                "group_pitch": 10752,
+                "inst_paths": [
+                    "pass/macro_bad_top_layer"
+                ],
+                "inst_orientations": [
+                    "r0"
+                ]
+            }
+        ]
+    },
+    {
+        "macro_3": [
+            {
+                "layer": "M4",
+                "direction": "horizontal",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 864,
+                "spacing": 288,
+                "group_pitch": 10752,
+                "offset": 3056,
+                "inst_paths": [
+                    "pass/macro_bad_mirroring"
+                ],
+                "inst_orientations": [
+                    "mx"
+                ]
+            },
+            {
+                "layer": "M5",
+                "direction": "vertical",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 864,
+                "spacing": 288,
+                "group_pitch": 10752,
+                "inst_paths": [
+                    "pass/macro_bad_mirroring"
+                ],
+                "inst_orientations": [
+                    "mx"
+                ]
+            }
+        ]
+    }
+]
+

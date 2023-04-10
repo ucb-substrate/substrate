@@ -1,0 +1,10 @@
+[package]
+name = "subgates"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+substrate = { path = "../../substrate" }
+subgeom = { path = "../subgeom" }
+arcstr = { version = "1.1.5", features = ["serde"] }
+serde = { version = "1", features = ["derive", "rc"] }

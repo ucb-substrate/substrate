@@ -1,0 +1,33 @@
+[package]
+description = "Gds21 Integrated Circuit Layout Parser & Writer"
+name = "gds21"
+# Shared layout21 attributes
+authors = ["Dan Fritchman <dan@fritch.mn>"]
+edition = "2018"
+license = "BSD-3-Clause"
+repository = "https://github.com/dan-fritchman/Layout21"
+version = "0.2.1"
+workspace = "../../"
+exclude = ["resources",]
+
+[dependencies]
+byteorder = "1.4.3"
+chrono = { version = "0.4.24", features = ["serde"] }
+derive_builder = "0.9.0"
+derive_more = "0.99.17"
+num-derive = "0.3"
+num-traits = "0.2.15"
+serde = { version = "1.0.159", features = ["derive"] }
+serde_derive = "1.0.159"
+serde_json = "1.0"
+serde_yaml = "0.8"
+toml = "0.7.3"
+tempfile = { version = "3", optional = true }
+arcstr = { version = "1.1.5", features = ["serde"] }
+textwrap = "0.14.2"
+
+[dev-dependencies]
+tempfile = {version = "3"}
+
+[features]
+selftest = ["tempfile"]

@@ -1,0 +1,19 @@
+[workspace]
+
+members = [
+    "codegen",
+    "examples/tut01_getting_started",
+    "libs/gds21",
+    "libs/subgeom",
+    "libs/subgates",
+    "pdks/sky130_common_pdk",
+    "pdks/sky130_open_pdk",
+    "pdks/sky130_commercial_pdk",
+    "plugins/ngspice",
+    "plugins/spectre",
+    "plugins/spice_rawfile",
+    "plugins/subspice",
+    "plugins/sub_calibre",
+    "scripts/mergegds",
+    "substrate",
+]

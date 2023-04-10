@@ -1,0 +1,13 @@
+[package]
+name = "subgeom"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1", features = ["derive", "rc"] }
+enum_dispatch = "0.3.11"
+array_map = { version = "0.4", features = ["derive", "serde", "std"] }
+thiserror = "1.0.40"
+gds21 = { path = "../../libs/gds21" }

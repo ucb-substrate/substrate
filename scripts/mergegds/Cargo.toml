@@ -1,0 +1,10 @@
+[package]
+name = "mergegds"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rahul Kumar <rahulkumar@berkeley.edu>"]
+
+[dependencies]
+substrate = { path = "../../substrate" }
+empty_pdk = { path = "../../pdks/empty_pdk" }
+clap = { version = "4.2.1", features = ["derive"] }

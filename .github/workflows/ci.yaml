@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+
+jobs:
+  check-workspace:
+    name: Build, lint, and test
+    runs-on: [self-hosted]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'recursive'
+      - name: Check formatting
+        run: |
+          cargo +nightly fmt --check
+      - name: Lint
+        shell: bash
+        run: make lint
+      - name: Test
+        shell: bash
+        run: make test

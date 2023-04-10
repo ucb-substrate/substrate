@@ -1,0 +1,18 @@
+[package]
+name = "codegen"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+darling = "0.14.4"
+syn = "1.0.91"
+quote = "1.0.26"
+paste = "1.0.12"
+proc-macro2 = "1.0.37"
+proc-macro-crate = "1.3.1"
+itertools = "0.10.5"
+
+[lib]
+proc-macro = true

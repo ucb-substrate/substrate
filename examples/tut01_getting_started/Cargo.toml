@@ -1,0 +1,9 @@
+[package]
+name = "tut01_getting_started"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+substrate = { path = "../../substrate" }
+empty_pdk = { path = "../../pdks/empty_pdk" }
+arcstr = "1"

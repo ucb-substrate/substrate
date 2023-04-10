@@ -1,0 +1,5 @@
+* my_transistor
+
+.subckt my_transistor d g s b
+* Contents omitted
+.ends

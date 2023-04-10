@@ -1,0 +1,9 @@
+[package]
+name = "empty_pdk"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rahul Kumar <rahulkumar@berkeley.edu>"]
+
+[dependencies]
+substrate = { path = "../../substrate" }
+arcstr = "1"

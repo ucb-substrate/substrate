@@ -1,0 +1,13 @@
+[package]
+name = "ngspice"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Substrate plugin for Ngspice"
+
+[dependencies]
+lazy_static = "1.4.0"
+serde = { version = "1.0.159", features = ["derive"] }
+substrate = { path = "../../substrate" }
+tera = "1.18.1"
+spice_rawfile = { path = "../spice_rawfile" }

@@ -1,0 +1,7 @@
+spice_subckt_name = "example_01"
+spice_path = "../schematics/example_01.spice"
+
+[ports]
+input = { width = 3, direction = "InOut" }
+output = { width = 1, direction = "Output" }
+control = { }

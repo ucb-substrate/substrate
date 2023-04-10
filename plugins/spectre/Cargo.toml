@@ -1,0 +1,18 @@
+[package]
+name = "spectre"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = "1.4.0"
+serde = { version = "1.0.159", features = ["derive"] }
+substrate = { path = "../../substrate" }
+tera = "1.18.1"
+spice_rawfile = { path = "../spice_rawfile" }
+anyhow = "1.0.70"
+psf_ascii = { git = "https://github.com/rahulk29/psf_ascii.git", branch = "master" }
+
+[dev-dependencies]
+approx = "0.5.1"

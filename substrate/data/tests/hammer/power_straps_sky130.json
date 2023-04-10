@@ -1,0 +1,46 @@
+[
+    {
+        "macro": [
+            {
+                "layer": "met3",
+                "direction": "horizontal",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 600,
+                "spacing": 400,
+                "group_pitch": 10000,
+                "offset": 500,
+                "inst_paths": [
+                    "pass/macro",
+                    "pass/macro_on_pitch"
+                ],
+                "inst_orientations": [
+                    "r0",
+                    "r0"
+                ]
+            },
+            {
+                "layer": "met4",
+                "direction": "vertical",
+                "net_order": [
+                    "VSS",
+                    "VDD"
+                ],
+                "width": 1200,
+                "spacing": 1400,
+                "group_pitch": 10000,
+                "inst_paths": [
+                    "pass/macro",
+                    "pass/macro_on_pitch"
+                ],
+                "inst_orientations": [
+                    "r0",
+                    "r0"
+                ]
+            }
+        ]
+    }
+]
+
