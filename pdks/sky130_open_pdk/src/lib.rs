@@ -15,16 +15,18 @@ pub struct Sky130OpenPdk {
     inner: Sky130Pdk,
 }
 
-impl Pdk for Sky130OpenPdk {
-    fn new(params: &substrate::pdk::PdkParams) -> substrate::error::Result<Self>
-    where
-        Self: Sized,
+impl Sky130OpenPdk {
+    #[inline]
+    pub fn new(params: &substrate::pdk::PdkParams) -> substrate::error::Result<Self>
     {
         Ok(Self {
             inner: Sky130Pdk::new(params)?,
         })
     }
 
+}
+
+impl Pdk for Sky130OpenPdk {
     fn name(&self) -> &'static str {
         "sky130-open"
     }

@@ -1,8 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use empty_pdk::EmptyPdk;
 use substrate::data::{SubstrateConfig, SubstrateCtx};
-use substrate::pdk::{Pdk, PdkParams};
 
 pub fn merge<T: AsRef<Path>>(
     output: impl AsRef<Path>,
@@ -19,10 +18,7 @@ pub fn merge<T: AsRef<Path>>(
 pub fn ctx() -> SubstrateCtx {
     let cfg = SubstrateConfig::builder()
         .pdk(
-            EmptyPdk::new(&PdkParams {
-                pdk_root: PathBuf::from("."),
-            })
-            .unwrap(),
+            EmptyPdk::new()
         )
         .build();
     SubstrateCtx::from_config(cfg).unwrap()

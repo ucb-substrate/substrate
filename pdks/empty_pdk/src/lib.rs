@@ -14,13 +14,17 @@ use substrate::pdk::{Pdk, Supplies, Supply, SupplyId, Units};
 use substrate::schematic::context::SchematicCtx;
 use substrate::units::SiPrefix;
 
+#[derive(Debug, Default, Clone)]
 pub struct EmptyPdk {}
 
-impl Pdk for EmptyPdk {
-    fn new(_params: &substrate::pdk::PdkParams) -> substrate::error::Result<Self> {
-        Ok(Self {})
+impl EmptyPdk {
+    #[inline]
+    pub fn new() -> Self {
+        Self {}
     }
+}
 
+impl Pdk for EmptyPdk {
     fn name(&self) -> &'static str {
         "empty"
     }

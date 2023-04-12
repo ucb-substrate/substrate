@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use arcstr::ArcStr;
 use sky130_common_pdk::Sky130Pdk;
 use substrate::error::Result;
@@ -5,7 +7,7 @@ use substrate::layout::context::LayoutCtx;
 use substrate::layout::elements::via::ViaParams;
 use substrate::layout::layers::Layers;
 use substrate::pdk::mos::spec::MosSpec;
-use substrate::pdk::{Pdk, Units};
+use substrate::pdk::{Pdk, Units, PdkParams};
 use substrate::schematic::context::SchematicCtx;
 use substrate::schematic::netlist::{IncludeBundle, NetlistPurpose};
 use substrate::units::SiPrefix;
@@ -14,18 +16,21 @@ pub mod mos;
 
 pub struct Sky130CommercialPdk {
     inner: Sky130Pdk,
+    commercial_root: PathBuf,
+}
+
+impl Sky130CommercialPdk {
+    pub fn new(commercial_root: PathBuf, open_root: PathBuf) -> substrate::error::Result<Self> {
+        Ok(Self {
+            commercial_root,
+            inner: Sky130Pdk::new(&PdkParams {
+                pdk_root: open_root,
+            })?,
+        })
+    }
 }
 
 impl Pdk for Sky130CommercialPdk {
-    fn new(params: &substrate::pdk::PdkParams) -> substrate::error::Result<Self>
-    where
-        Self: Sized,
-    {
-        Ok(Self {
-            inner: Sky130Pdk::new(params)?,
-        })
-    }
-
     fn name(&self) -> &'static str {
         "sky130-commercial"
     }
@@ -100,7 +105,7 @@ impl Pdk for Sky130CommercialPdk {
 
         let includes = includes
             .iter()
-            .map(|p| self.inner.pdk_root.join(p))
+            .map(|p| self.commercial_root.join(p))
             .collect();
 
         Ok(IncludeBundle {
