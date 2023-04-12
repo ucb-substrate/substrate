@@ -7,7 +7,7 @@ use substrate::layout::context::LayoutCtx;
 use substrate::layout::elements::via::ViaParams;
 use substrate::layout::layers::Layers;
 use substrate::pdk::mos::spec::MosSpec;
-use substrate::pdk::{Pdk, Units, PdkParams};
+use substrate::pdk::{Pdk, PdkParams, Units};
 use substrate::schematic::context::SchematicCtx;
 use substrate::schematic::netlist::{IncludeBundle, NetlistPurpose};
 use substrate::units::SiPrefix;
@@ -113,6 +113,10 @@ impl Pdk for Sky130CommercialPdk {
             includes,
             ..Default::default()
         })
+    }
+
+    fn standard_cells(&self) -> Result<substrate::pdk::stdcell::StdCellDb> {
+        self.inner.std_cells()
     }
 
     fn corners(&self) -> Result<substrate::pdk::corner::CornerDb> {
