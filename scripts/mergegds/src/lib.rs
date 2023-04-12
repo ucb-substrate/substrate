@@ -16,10 +16,6 @@ pub fn merge<T: AsRef<Path>>(
 }
 
 pub fn ctx() -> SubstrateCtx {
-    let cfg = SubstrateConfig::builder()
-        .pdk(
-            EmptyPdk::new()
-        )
-        .build();
+    let cfg = SubstrateConfig::builder().pdk(EmptyPdk::new()).build();
     SubstrateCtx::from_config(cfg).unwrap()
 }
