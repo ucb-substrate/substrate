@@ -124,7 +124,7 @@ impl<'a> SpectreOutputParser<'a> {
                 _ => bail!("spectre plugin only supports ac and transient simulations"),
             }
         } else {
-            bail!("spectre plugin only supports psfascii output format");
+            return Ok(None);
         };
 
         self.current_analysis += 1;
