@@ -79,10 +79,6 @@ impl Units {
 }
 
 pub trait Pdk {
-    fn new(params: &PdkParams) -> Result<Self>
-    where
-        Self: Sized;
-
     fn name(&self) -> &'static str;
 
     fn process(&self) -> &'static str;

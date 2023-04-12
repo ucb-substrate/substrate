@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use ngspice::Ngspice;
 use sky130_open_pdk::Sky130OpenPdk;
 use substrate::data::{SubstrateConfig, SubstrateCtx};
-use substrate::pdk::{Pdk, PdkParams};
+use substrate::pdk::PdkParams;
 use substrate::schematic::netlist::impls::spice::SpiceNetlister;
 use substrate::verification::simulation::{Simulator, SimulatorOpts};
 

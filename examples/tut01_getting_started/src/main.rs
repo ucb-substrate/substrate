@@ -1,10 +1,7 @@
-use std::path::PathBuf;
-
 use arcstr::ArcStr;
 use empty_pdk::EmptyPdk;
 use substrate::component::{Component, NoParams};
 use substrate::data::{SubstrateConfig, SubstrateCtx};
-use substrate::pdk::{Pdk, PdkParams};
 use substrate::schematic::circuit::Direction;
 use substrate::schematic::context::SchematicCtx;
 use substrate::schematic::elements::resistor::Resistor;
@@ -47,10 +44,7 @@ impl Component for VDivider {
 }
 
 pub fn setup_ctx() -> SubstrateCtx {
-    let pdk = EmptyPdk::new(&PdkParams {
-        pdk_root: PathBuf::from("."),
-    })
-    .unwrap();
+    let pdk = EmptyPdk::new();
     let cfg = SubstrateConfig::builder()
         .netlister(SpiceNetlister::new())
         .pdk(pdk)
