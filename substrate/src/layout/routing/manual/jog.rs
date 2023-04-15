@@ -1,7 +1,7 @@
 //! Routing jogs.
 
 use derive_builder::Builder;
-use subgeom::{Dir, Edge, Rect, Sign, Span};
+use subgeom::{Dir, Edge, Point, Rect, Sign, Span};
 
 use crate::layout::cell::Element;
 use crate::layout::group::Group;
@@ -95,10 +95,8 @@ pub struct ElbowJog {
     ///
     /// Determines the initial width and direction of the jog.
     src: Edge,
-    /// The end coordinate in the direction of the first leg of the jog.
-    coord1: i64,
-    /// The end coordinate in the direction of the second leg of the jog.
-    coord2: i64,
+    /// Destination point.
+    dst: Point,
     /// Width of the second leg of the jog.
     ///
     /// If not specified, both legs will have the same width.
@@ -118,7 +116,7 @@ impl ElbowJog {
         Rect::span_builder()
             .with(
                 self.src.norm_dir(),
-                Span::from_point(self.src.coord()).add_point(self.coord1),
+                Span::from_point(self.src.coord()).union(self.span2()),
             )
             .with(self.src.edge_dir(), self.src.span())
             .build()
@@ -126,20 +124,26 @@ impl ElbowJog {
 
     pub fn r2(&self) -> Rect {
         Rect::span_builder()
-            .with(self.src.edge_dir(), self.src.span().add_point(self.coord2))
             .with(
-                self.src.norm_dir(),
-                Span::with_point_and_length(
-                    self.src.side().sign(),
-                    self.coord1,
-                    if let Some(width2) = self.width2 {
-                        width2
-                    } else {
-                        self.src.span().length()
-                    },
-                ),
+                self.src.edge_dir(),
+                self.src
+                    .span()
+                    .add_point(self.dst.coord(self.src.edge_dir())),
             )
+            .with(self.src.norm_dir(), self.span2())
             .build()
+    }
+
+    fn width2(&self) -> i64 {
+        if let Some(width2) = self.width2 {
+            width2
+        } else {
+            self.src.span().length()
+        }
+    }
+
+    fn span2(&self) -> Span {
+        Span::from_center_span(self.dst.coord(self.src.norm_dir()), self.width2())
     }
 
     pub fn generate(&self) -> Group {

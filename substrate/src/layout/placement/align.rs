@@ -99,7 +99,7 @@ pub trait AlignRect: Translate + BoundBox {
     }
 
     fn align_centers(&mut self, other: impl BoundBox) {
-        self.align_centers_vertically(&other);
+        self.align_centers_horizontally(&other);
         self.align_centers_vertically(&other);
     }
 

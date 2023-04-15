@@ -361,10 +361,10 @@ impl GreedyRouter {
                 y_grid.index(ty_min).union(y_grid.index(ty_max)),
             ),
             _ => {
-                let track_right = x_grid.track_with_loc(TrackLocator::StartsAfter, rect.left());
-                let track_left = x_grid.track_with_loc(TrackLocator::EndsBefore, rect.right());
-                let track_top = y_grid.track_with_loc(TrackLocator::StartsAfter, rect.bottom());
-                let track_bot = y_grid.track_with_loc(TrackLocator::EndsBefore, rect.top());
+                let track_right = x_grid.track_with_loc(TrackLocator::EndsAfter, rect.left());
+                let track_left = x_grid.track_with_loc(TrackLocator::StartsBefore, rect.right());
+                let track_top = y_grid.track_with_loc(TrackLocator::EndsAfter, rect.bottom());
+                let track_bot = y_grid.track_with_loc(TrackLocator::StartsBefore, rect.top());
 
                 let (first_dirs, second_dirs) = match strategy {
                     ExpandToGridStrategy::All => unreachable!(),

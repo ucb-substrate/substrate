@@ -12,6 +12,7 @@ impl Sky130Pdk {
             ("buf", Function::Buf, vec![1, 2, 4, 6, 8, 12, 16]),
             ("bufbuf", Function::Buf, vec![8, 16]),
             ("inv", Function::Inv, vec![1, 2, 4, 6, 8]),
+            ("tap", Function::Tap, vec![1, 2]),
             ("mux2", Function::Mux2, vec![1, 2, 4, 8]),
             ("mux4", Function::Mux4, vec![1, 2, 4]),
             ("nand2", Function::Nand2, vec![1, 2, 4, 8]),
