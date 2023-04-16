@@ -308,13 +308,24 @@ impl Simulator for Spectre {
 }
 
 fn get_analyses(input: &[Analysis]) -> Vec<String> {
-    input.iter().map(analysis_line).collect()
+    input
+        .iter()
+        .enumerate()
+        .map(|(i, analysis)| analysis_line(analysis, i))
+        .collect()
 }
 
-fn analysis_line(input: &Analysis) -> String {
+fn analysis_line(input: &Analysis, num: usize) -> String {
     match input {
         Analysis::Op(_) => String::from(".op"),
-        Analysis::Tran(a) => format!(".tran {} {} {}", a.step, a.stop, a.start),
+        Analysis::Tran(a) => {
+            let strobe = if let Some(strobe) = a.strobe_period {
+                format!(" strobeperiod={strobe}")
+            } else {
+                String::new()
+            };
+            format!("simulator lang=spectre\nanalysis{num} tran step={} stop={} start={}{}\nsimulator lang=spice", a.step, a.stop, a.start, strobe)
+        }
         Analysis::Ac(a) => format!(
             ".ac {} {} {} {}",
             fmt_sweep_mode(a.sweep),

@@ -159,6 +159,8 @@ pub struct TranAnalysis {
     pub step: f64,
     #[builder(default)]
     pub start: f64,
+    #[builder(default)]
+    pub strobe_period: Option<f64>,
 }
 
 impl TranAnalysis {
