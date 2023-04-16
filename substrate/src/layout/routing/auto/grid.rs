@@ -318,6 +318,7 @@ impl GreedyRouter {
             .track_with_loc(TrackLocator::EndsAfter, rect.top())
             .try_into()
             .unwrap_or(0);
+
         PosSpan {
             layer: self.abs_layer(layer),
             tx_min,
