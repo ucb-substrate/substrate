@@ -26,15 +26,15 @@ impl Component for VDivider {
         let vdd = ctx.port("vdd", Direction::InOut);
         let vss = ctx.port("vss", Direction::InOut);
 
-        let mut r1 = ctx.instantiate::<Resistor>(&SiValue::new(2, SiPrefix::Kilo))?;
-        r1.connect_all([("p", &vdd), ("n", &out)]);
-        r1.set_name("R1");
-        ctx.add_instance(r1);
+        ctx.instantiate::<Resistor>(&SiValue::new(2, SiPrefix::Kilo))?
+            .with_connections([("p", &vdd), ("n", &out)])
+            .named("R1")
+            .add_to(ctx);
 
-        let mut r2 = ctx.instantiate::<Resistor>(&SiValue::new(1, SiPrefix::Kilo))?;
-        r2.connect_all([("p", &out), ("n", &vss)]);
-        r2.set_name("R2");
-        ctx.add_instance(r2);
+        ctx.instantiate::<Resistor>(&SiValue::new(1, SiPrefix::Kilo))?
+            .with_connections([("p", &out), ("n", &vss)])
+            .named("R2")
+            .add_to(ctx);
         Ok(())
     }
 

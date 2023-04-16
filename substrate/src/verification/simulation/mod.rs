@@ -159,7 +159,7 @@ pub struct TranAnalysis {
     pub step: f64,
     #[builder(default)]
     pub start: f64,
-    #[builder(default)]
+    #[builder(default, setter(strip_option))]
     pub strobe_period: Option<f64>,
 }
 
