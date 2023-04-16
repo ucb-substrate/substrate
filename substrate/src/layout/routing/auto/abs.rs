@@ -11,8 +11,13 @@ use subgeom::Dir;
 
 use super::error::*;
 
+/// Specifies which grid cells can be connected to one another.
 #[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Copy, Clone)]
 pub struct Net(usize);
+
+/// Specifies which grid cells are currently connected to one another.
+#[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Copy, Clone)]
+pub struct ConnectionGroup(usize);
 
 #[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Copy, Clone)]
 pub struct Layer(pub usize);
@@ -51,8 +56,14 @@ impl From<bool> for HasVia {
 
 #[derive(Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Copy, Clone)]
 pub enum State {
-    Occupied { net: Net, via: HasVia },
-    Blocked { net: Option<Net> },
+    Occupied {
+        net: Net,
+        via: HasVia,
+        conn_group: ConnectionGroup,
+    },
+    Blocked {
+        net: Option<Net>,
+    },
     Empty,
 }
 
@@ -64,7 +75,7 @@ impl State {
         matches!(self, State::Occupied { .. })
     }
     pub fn is_occupied_by(&self, net: Net) -> bool {
-        if let State::Occupied { net: other, via: _ } = self {
+        if let State::Occupied { net: other, .. } = self {
             net == *other
         } else {
             false
@@ -119,8 +130,8 @@ pub struct Pos {
     pub(crate) ty: usize,
     /// Whether the current position is continuous with the previous position.
     ///
-    /// For example, set to true if the start of a segment created after jumping through
-    /// and existing route for a given net.
+    /// For example, set to true if this `Pos` is the start of a segment created after jumping through
+    /// an existing route for a given net.
     jump: bool,
 }
 
@@ -320,9 +331,65 @@ impl AbstractLayerInfo {
     }
 }
 
-pub struct GreedyAbstractRouter {
+struct AbstractNetInfo {
     curr_net: Net,
-    net_to_pos: HashMap<Net, HashSet<Pos>>,
+    curr_group: ConnectionGroup,
+    assigned_nets: HashSet<Net>,
+    conn_groups: HashMap<ConnectionGroup, HashSet<Pos>>,
+}
+
+impl AbstractNetInfo {
+    fn new() -> Self {
+        Self {
+            curr_net: Net(0),
+            curr_group: ConnectionGroup(0),
+            assigned_nets: HashSet::new(),
+            conn_groups: HashMap::new(),
+        }
+    }
+
+    fn get_unused_net(&mut self) -> Net {
+        for net in self.assigned_nets.iter() {
+            if &self.curr_net == net {
+                self.curr_net.0 += 1;
+            }
+        }
+        self.assigned_nets.insert(self.curr_net);
+        self.curr_net
+    }
+
+    fn get_unused_conn_group(&mut self) -> ConnectionGroup {
+        for group in self.conn_groups.keys() {
+            if &self.curr_group == group {
+                self.curr_group.0 += 1;
+            }
+        }
+        self.conn_groups.insert(self.curr_group, HashSet::new());
+        self.curr_group
+    }
+
+    fn delete_from_group(&mut self, pos: Pos, conn_group: ConnectionGroup) {
+        if let Some(v) = self.conn_groups.get_mut(&conn_group) {
+            v.remove(&pos);
+        }
+    }
+
+    fn add_to_group(&mut self, pos: Pos, conn_group: ConnectionGroup) {
+        self.conn_groups
+            .entry(conn_group)
+            .or_insert(HashSet::new())
+            .insert(pos);
+    }
+
+    fn pos_in_group(&self, conn_group: ConnectionGroup) -> Option<Vec<Pos>> {
+        self.conn_groups
+            .get(&conn_group)
+            .map(|set| set.iter().copied().collect())
+    }
+}
+
+pub struct GreedyAbstractRouter {
+    nets: AbstractNetInfo,
     layers: Vec<AbstractLayerInfo>,
 }
 
@@ -356,8 +423,7 @@ impl GreedyAbstractRouter {
         ty: usize,
     ) -> Self {
         Self {
-            curr_net: Net(0),
-            net_to_pos: HashMap::new(),
+            nets: AbstractNetInfo::new(),
             layers: layers
                 .into_iter()
                 .map(|cfg| AbstractLayerInfo {
@@ -369,8 +435,6 @@ impl GreedyAbstractRouter {
         }
     }
 
-    // Accepts `dst` so that we can route to destinations that are blocked.
-    // Unfortunately, causes illegal routes to be accepted.
     pub fn route_with_net(
         &mut self,
         src: PosSpan,
@@ -395,22 +459,27 @@ impl GreedyAbstractRouter {
         let nodes = pathfinding::directed::bfs::bfs(&Node::Span(src), successors, success)
             .ok_or(Error::NoRouteFound)?;
 
+        let mut groups = Vec::new();
         for i in 1..nodes.len() {
             let node = &nodes[i].unwrap_pos();
-            let has_via = {
-                i < nodes.len() - 1
-                    && (nodes[i + 1].unwrap_pos().layer != node.layer)
-                    && !nodes[i + 1].unwrap_pos().is_jump()
-            };
-            let state = self.grid_mut(node.layer).get_mut(node.tx, node.ty).unwrap();
-            *state = State::Occupied {
-                net,
-                via: has_via.into(),
-            };
-            self.net_to_pos
-                .entry(net)
-                .or_insert(HashSet::new())
-                .insert(*node);
+            let state = self.grid(node.layer).get(node.tx, node.ty).unwrap();
+            if let State::Occupied { conn_group, .. } = state {
+                groups.push(*conn_group);
+            }
+        }
+        let group = if groups.is_empty() {
+            self.nets.get_unused_conn_group()
+        } else {
+            for i in 1..groups.len() {
+                for pos in self.nets.pos_in_group(groups[i]).unwrap() {
+                    self.occupy_inner(pos, net, groups[0]);
+                }
+            }
+            groups[0]
+        };
+
+        for i in 1..nodes.len() {
+            self.occupy_inner(nodes[i].unwrap_pos(), net, group);
         }
 
         Ok(nodes[1..].iter().map(|n| n.unwrap_pos()).collect_vec())
@@ -422,55 +491,150 @@ impl GreedyAbstractRouter {
     }
 
     pub fn get_unused_net(&mut self) -> Net {
-        for net in self.net_to_pos.keys() {
-            if &self.curr_net == net {
-                self.curr_net.0 += 1;
-            }
-        }
-        self.net_to_pos.insert(self.curr_net, HashSet::new());
-        self.curr_net
+        self.nets.get_unused_net()
     }
 
-    fn block_inner(&mut self, pos: Pos, net: Option<Net>) {
-        *self.grid_mut(pos.layer).get_mut(pos.tx, pos.ty).unwrap() = State::Blocked { net };
+    fn check_block(&self, pos: Pos, net: Option<Net>) -> Result<()> {
+        // Blocking can never lead to inconsistent state unless blocking would undo an earlier
+        // blockage or cause there two be two nets blocking a certain location.
+        match self.grid(pos.layer).get(pos.tx, pos.ty).unwrap() {
+            State::Blocked { net: other } => {
+                if net.is_some() && *other != net {
+                    return Err(Error::Blocked);
+                }
+            }
+            State::Occupied { .. } | State::Empty => {}
+        };
+
+        Ok(())
     }
-    fn block_span_inner(&mut self, layer: Layer, span: PosSpan, net: Option<Net>) {
+
+    fn block_single_inner(&mut self, pos: Pos, net: Option<Net>) {
+        match self.grid_mut(pos.layer).get_mut(pos.tx, pos.ty).unwrap() {
+            State::Occupied { .. } => {}
+            s @ (State::Blocked { .. } | State::Empty) => *s = State::Blocked { net },
+        };
+    }
+
+    fn block_inner(&mut self, pos: Pos, net: Option<Net>) -> Result<()> {
+        self.check_block(pos, net)?;
+        self.block_single_inner(pos, net);
+        Ok(())
+    }
+
+    fn block_span_inner(&mut self, span: PosSpan, net: Option<Net>) -> Result<()> {
         for tx in span.tx_min..=span.tx_max {
             for ty in span.ty_min..=span.ty_max {
-                self.grid_mut(layer)[tx][ty] = State::Blocked { net };
+                let pos = Pos::new(span.layer, tx, ty);
+                self.check_block(pos, net)?;
             }
         }
+        for tx in span.tx_min..=span.tx_max {
+            for ty in span.ty_min..=span.ty_max {
+                let pos = Pos::new(span.layer, tx, ty);
+                self.block_single_inner(pos, net);
+            }
+        }
+        Ok(())
     }
 
-    pub fn block(&mut self, pos: Pos) {
-        self.block_inner(pos, None);
-    }
-    pub fn block_span(&mut self, layer: Layer, span: PosSpan) {
-        self.block_span_inner(layer, span, None);
+    /// Blocks the given `Pos`, leaving it unchanged if it is already occupied.
+    pub fn block(&mut self, pos: Pos) -> Result<()> {
+        self.block_inner(pos, None)
     }
 
-    pub fn block_for_net(&mut self, pos: Pos, net: Net) {
-        self.block_inner(pos, Some(net));
-    }
-    pub fn block_span_for_net(&mut self, layer: Layer, span: PosSpan, net: Net) {
-        self.block_span_inner(layer, span, Some(net));
+    /// Blocks the given `PosSpan`, leaving occupied positions unchanged.
+    pub fn block_span(&mut self, span: PosSpan) -> Result<()> {
+        self.block_span_inner(span, None)
     }
 
-    pub fn occupy(&mut self, pos: Pos, net: Net) {
+    /// Blocks the given `Pos` for the provided `Net`, leaving it unchanged if it is already occupied.
+    pub fn block_for_net(&mut self, pos: Pos, net: Net) -> Result<()> {
+        self.block_inner(pos, Some(net))
+    }
+    /// Blocks the given `PosSpan` for the provided `Net`, leaving occupied positions unchanged.
+    pub fn block_span_for_net(&mut self, span: PosSpan, net: Net) -> Result<()> {
+        self.block_span_inner(span, Some(net))
+    }
+
+    fn check_occupy(&mut self, pos: Pos, net: Net) -> Result<()> {
+        match self.grid(pos.layer).get(pos.tx, pos.ty).unwrap() {
+            State::Occupied { net: other, .. } => {
+                if *other != net {
+                    return Err(Error::Occupied);
+                }
+            }
+            State::Blocked { net: other } => {
+                if other.is_none() || other.unwrap() != net {
+                    return Err(Error::Blocked);
+                }
+            }
+            State::Empty => {}
+        };
+
+        Ok(())
+    }
+
+    fn occupy_inner(&mut self, pos: Pos, net: Net, conn_group: ConnectionGroup) {
+        if let State::Occupied {
+            conn_group: old_group,
+            ..
+        } = self.grid(pos.layer).get(pos.tx, pos.ty).unwrap()
+        {
+            self.nets.delete_from_group(pos, *old_group);
+        }
+
         *self.grid_mut(pos.layer).get_mut(pos.tx, pos.ty).unwrap() = State::Occupied {
             net,
             via: HasVia::No,
+            conn_group,
         };
+        self.nets.add_to_group(pos, conn_group);
     }
-    pub fn occupy_span(&mut self, layer: Layer, span: PosSpan, net: Net) {
+
+    pub fn occupy(&mut self, pos: Pos, net: Net) -> Result<()> {
+        self.check_occupy(pos, net)?;
+        let group = if let State::Occupied { conn_group, .. } =
+            self.grid(pos.layer).get(pos.tx, pos.ty).unwrap()
+        {
+            *conn_group
+        } else {
+            self.nets.get_unused_conn_group()
+        };
+        self.occupy_inner(pos, net, group);
+        Ok(())
+    }
+    pub fn occupy_span(&mut self, span: PosSpan, net: Net) -> Result<()> {
+        let mut groups = Vec::new();
         for tx in span.tx_min..=span.tx_max {
             for ty in span.ty_min..=span.ty_max {
-                self.grid_mut(layer)[tx][ty] = State::Occupied {
-                    net,
-                    via: HasVia::No,
-                };
+                let pos = Pos::new(span.layer, tx, ty);
+                self.check_occupy(pos, net)?;
+                if let State::Occupied { conn_group, .. } =
+                    self.grid(pos.layer).get(pos.tx, pos.ty).unwrap()
+                {
+                    groups.push(*conn_group);
+                }
             }
         }
+        let group = if groups.is_empty() {
+            self.nets.get_unused_conn_group()
+        } else {
+            for i in 1..groups.len() {
+                for pos in self.nets.pos_in_group(groups[i]).unwrap() {
+                    self.occupy_inner(pos, net, groups[0]);
+                }
+            }
+            groups[0]
+        };
+        for tx in span.tx_min..=span.tx_max {
+            for ty in span.ty_min..=span.ty_max {
+                let pos = Pos::new(span.layer, tx, ty);
+                self.occupy_inner(pos, net, group);
+            }
+        }
+
+        Ok(())
     }
 
     pub fn segments(&self, layer: Layer) -> Vec<Segment> {
@@ -541,11 +705,16 @@ impl GreedyAbstractRouter {
             .map(Node::Pos)
             .collect_vec();
 
-        if state.is_occupied_by(net) {
-            if let Some(positions) = self.net_to_pos.get(&net) {
-                for n in positions {
-                    filtered_candidates.push(Node::Pos(n.mark_jump()));
-                }
+        if let State::Occupied {
+            conn_group,
+            net: other,
+            ..
+        } = state
+        {
+            if *other == net {
+                let pos_list = self.nets.pos_in_group(*conn_group).unwrap();
+                filtered_candidates
+                    .extend(pos_list.into_iter().map(|pos| Node::Pos(pos.mark_jump())));
             }
         }
 

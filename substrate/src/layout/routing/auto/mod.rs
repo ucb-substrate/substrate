@@ -309,21 +309,20 @@ impl GreedyRouter {
 
     pub fn block(&mut self, layer: LayerKey, rect: Rect) {
         let span = self.expand_to_pos_span(layer, rect);
-        self.inner.block_span(self.abs_layer(layer), span);
+        self.inner.block_span(span);
     }
 
     pub fn block_with_shrink(&mut self, layer: LayerKey, rect: Rect) {
         let span = self.shrink_to_pos_span(layer, rect);
-        self.inner.block_span(self.abs_layer(layer), span);
+        self.inner.block_span(span);
     }
 
     pub fn occupy(&mut self, layer: LayerKey, rect: Rect, net: &str) {
         let net = self.get_net(net);
         let span = self.expand_to_pos_span(layer, rect);
-        self.inner
-            .block_span_for_net(self.abs_layer(layer), span, net);
+        self.inner.block_span_for_net(span, net);
         let span = self.shrink_to_pos_span(layer, rect);
-        self.inner.occupy_span(self.abs_layer(layer), span, net);
+        self.inner.occupy_span(span, net);
     }
 
     fn abs_layer(&self, layer: LayerKey) -> abs::Layer {
