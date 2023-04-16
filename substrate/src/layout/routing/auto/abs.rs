@@ -88,12 +88,11 @@ impl State {
         matches!(self, State::Blocked { .. })
     }
     pub fn is_blocked_by(&self, net: Net) -> bool {
-        if let State::Blocked { net: other } = self {
-            if let Some(other) = other {
-                return net == *other;
-            }
+        if let State::Blocked { net: Some(other) } = self {
+            net == *other
+        } else {
+            false
         }
-        false
     }
 }
 
@@ -460,8 +459,8 @@ impl GreedyAbstractRouter {
             .ok_or(Error::NoRouteFound)?;
 
         let mut groups = Vec::new();
-        for i in 1..nodes.len() {
-            let node = &nodes[i].unwrap_pos();
+        for node in nodes.iter().skip(1) {
+            let node = &node.unwrap_pos();
             let state = self.grid(node.layer).get(node.tx, node.ty).unwrap();
             if let State::Occupied { conn_group, .. } = state {
                 groups.push(*conn_group);
@@ -478,8 +477,8 @@ impl GreedyAbstractRouter {
             groups[0]
         };
 
-        for i in 1..nodes.len() {
-            self.occupy_inner(nodes[i].unwrap_pos(), net, group);
+        for node in nodes.iter().skip(1) {
+            self.occupy_inner(node.unwrap_pos(), net, group);
         }
 
         Ok(nodes[1..].iter().map(|n| n.unwrap_pos()).collect_vec())
@@ -494,67 +493,54 @@ impl GreedyAbstractRouter {
         self.nets.get_unused_net()
     }
 
-    fn check_block(&self, pos: Pos, net: Option<Net>) -> Result<()> {
-        // Blocking can never lead to inconsistent state unless blocking would undo an earlier
-        // blockage or cause there two be two nets blocking a certain location.
-        match self.grid(pos.layer).get(pos.tx, pos.ty).unwrap() {
+    fn block_single_inner(&mut self, pos: Pos, net: Option<Net>) {
+        let s = self.grid_mut(pos.layer).get_mut(pos.tx, pos.ty).unwrap();
+        *s = match s {
+            State::Occupied { .. } => {
+                return;
+            }
             State::Blocked { net: other } => {
-                if net.is_some() && *other != net {
-                    return Err(Error::Blocked);
+                if net != *other {
+                    State::Blocked { net }
+                } else {
+                    State::Blocked { net: None }
                 }
             }
-            State::Occupied { .. } | State::Empty => {}
-        };
-
-        Ok(())
-    }
-
-    fn block_single_inner(&mut self, pos: Pos, net: Option<Net>) {
-        match self.grid_mut(pos.layer).get_mut(pos.tx, pos.ty).unwrap() {
-            State::Occupied { .. } => {}
-            s @ (State::Blocked { .. } | State::Empty) => *s = State::Blocked { net },
+            State::Empty => State::Blocked { net },
         };
     }
 
-    fn block_inner(&mut self, pos: Pos, net: Option<Net>) -> Result<()> {
-        self.check_block(pos, net)?;
+    fn block_inner(&mut self, pos: Pos, net: Option<Net>) {
         self.block_single_inner(pos, net);
-        Ok(())
     }
 
-    fn block_span_inner(&mut self, span: PosSpan, net: Option<Net>) -> Result<()> {
-        for tx in span.tx_min..=span.tx_max {
-            for ty in span.ty_min..=span.ty_max {
-                let pos = Pos::new(span.layer, tx, ty);
-                self.check_block(pos, net)?;
-            }
-        }
+    fn block_span_inner(&mut self, span: PosSpan, net: Option<Net>) {
         for tx in span.tx_min..=span.tx_max {
             for ty in span.ty_min..=span.ty_max {
                 let pos = Pos::new(span.layer, tx, ty);
                 self.block_single_inner(pos, net);
             }
         }
-        Ok(())
     }
 
     /// Blocks the given `Pos`, leaving it unchanged if it is already occupied.
-    pub fn block(&mut self, pos: Pos) -> Result<()> {
+    pub fn block(&mut self, pos: Pos) {
         self.block_inner(pos, None)
     }
 
     /// Blocks the given `PosSpan`, leaving occupied positions unchanged.
-    pub fn block_span(&mut self, span: PosSpan) -> Result<()> {
+    pub fn block_span(&mut self, span: PosSpan) {
         self.block_span_inner(span, None)
     }
 
     /// Blocks the given `Pos` for the provided `Net`, leaving it unchanged if it is already occupied.
-    pub fn block_for_net(&mut self, pos: Pos, net: Net) -> Result<()> {
-        self.block_inner(pos, Some(net))
+    pub fn block_for_net(&mut self, pos: Pos, net: Net) {
+        self.block_inner(pos, Some(net));
     }
+
     /// Blocks the given `PosSpan` for the provided `Net`, leaving occupied positions unchanged.
-    pub fn block_span_for_net(&mut self, span: PosSpan, net: Net) -> Result<()> {
-        self.block_span_inner(span, Some(net))
+    pub fn block_span_for_net(&mut self, span: PosSpan, net: Net) {
+        self.block_span_inner(span, Some(net));
     }
 
     fn check_occupy(&mut self, pos: Pos, net: Net) -> Result<()> {

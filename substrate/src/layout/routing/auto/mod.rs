@@ -317,12 +317,13 @@ impl GreedyRouter {
         self.inner.block_span(span);
     }
 
-    pub fn occupy(&mut self, layer: LayerKey, rect: Rect, net: &str) {
+    pub fn occupy(&mut self, layer: LayerKey, rect: Rect, net: &str) -> crate::error::Result<()> {
         let net = self.get_net(net);
         let span = self.expand_to_pos_span(layer, rect);
         self.inner.block_span_for_net(span, net);
         let span = self.shrink_to_pos_span(layer, rect);
-        self.inner.occupy_span(span, net);
+        self.inner.occupy_span(span, net)?;
+        Ok(())
     }
 
     fn abs_layer(&self, layer: LayerKey) -> abs::Layer {

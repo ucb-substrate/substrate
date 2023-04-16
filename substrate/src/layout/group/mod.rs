@@ -296,13 +296,13 @@ impl Group {
         let tf = self.transformation();
         let recur = self.instances().flat_map(move |inst| {
             inst.shapes_on(layer)
-                .map(|shape| shape.transform(tf).clone())
+                .map(|shape| shape.transform(tf))
                 .collect::<Vec<Shape>>()
         });
         let curr = self
             .elements()
             .filter(move |elem| elem.layer.layer() == layer)
-            .map(|elem| elem.inner.clone());
+            .map(|elem| elem.inner);
         Box::new(curr.chain(recur))
     }
 }
