@@ -1032,6 +1032,11 @@ impl CellPort {
         self
     }
 
+    pub fn with_id(mut self, id: impl Into<PortId>) -> Self {
+        self.set_id(id);
+        self
+    }
+
     /// Returns the ID of the port.
     #[inline]
     pub fn id(&self) -> &PortId {

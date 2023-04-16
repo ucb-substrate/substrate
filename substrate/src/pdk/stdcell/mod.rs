@@ -96,6 +96,7 @@ impl<'a> StdCellRef<'a> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum Function {
     And2,
     And3,
@@ -116,6 +117,7 @@ pub enum Function {
     Xor2,
     Xor3,
     Xor4,
+    Tap,
     Other(String),
 }
 

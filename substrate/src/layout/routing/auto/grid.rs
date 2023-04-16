@@ -351,31 +351,90 @@ impl GreedyRouter {
         x_grid: &UniformTracks,
         y_grid: &UniformTracks,
     ) -> Rect {
-        let tx_min = x_grid.track_with_loc(TrackLocator::StartsBefore, rect.left());
-        let tx_max = x_grid.track_with_loc(TrackLocator::EndsAfter, rect.right());
-        let ty_min = y_grid.track_with_loc(TrackLocator::StartsBefore, rect.bottom());
-        let ty_max = y_grid.track_with_loc(TrackLocator::EndsAfter, rect.top());
         match strategy {
-            ExpandToGridStrategy::All => Rect::from_spans(
-                x_grid.index(tx_min).union(x_grid.index(tx_max)),
-                y_grid.index(ty_min).union(y_grid.index(ty_max)),
-            ),
+            ExpandToGridStrategy::All => {
+                let tx_min = x_grid.track_with_loc(TrackLocator::StartsBefore, rect.left());
+                let tx_max = x_grid.track_with_loc(TrackLocator::EndsAfter, rect.right());
+                let ty_min = y_grid.track_with_loc(TrackLocator::StartsBefore, rect.bottom());
+                let ty_max = y_grid.track_with_loc(TrackLocator::EndsAfter, rect.top());
+                Rect::from_spans(
+                    x_grid.index(tx_min).union(x_grid.index(tx_max)),
+                    y_grid.index(ty_min).union(y_grid.index(ty_max)),
+                )
+            }
             _ => {
+                // Tracks that may straddle both sides of the source rectangle.
+                let tx_min = x_grid.track_with_loc(TrackLocator::EndsAfter, rect.left());
+                let tx_max = x_grid.track_with_loc(TrackLocator::StartsBefore, rect.right());
+                let ty_min = y_grid.track_with_loc(TrackLocator::EndsAfter, rect.bottom());
+                let ty_max = y_grid.track_with_loc(TrackLocator::StartsBefore, rect.top());
+
+                // Tracks that do not straddle both sides of the source rectangle.
                 let track_right = x_grid.track_with_loc(TrackLocator::StartsAfter, rect.left());
                 let track_left = x_grid.track_with_loc(TrackLocator::EndsBefore, rect.right());
                 let track_top = y_grid.track_with_loc(TrackLocator::StartsAfter, rect.bottom());
                 let track_bot = y_grid.track_with_loc(TrackLocator::EndsBefore, rect.top());
 
+                // Only case where non-straddling rectangles are better is when a track is fully
+                // enclosed by the source rectangle.
+                let (tx_min, tx_max) = if track_right <= track_left {
+                    (track_right, track_left)
+                } else {
+                    (tx_min, tx_max)
+                };
+                let (ty_min, ty_max) = if track_top <= track_bot {
+                    (track_top, track_bot)
+                } else {
+                    (ty_min, ty_max)
+                };
+
+                // In the case where a track is fully enclosed, potentially need to swap the two so
+                // that `track_left` and `track_bot` actually corresponds to the
+                // leftmost/bottom-most track, respectively.
+                let (track_right, track_left) = if track_right < track_left {
+                    (track_left, track_right)
+                } else {
+                    (track_right, track_left)
+                };
+
+                let (track_top, track_bot) = if track_top < track_bot {
+                    (track_bot, track_top)
+                } else {
+                    (track_top, track_bot)
+                };
+
+                let mut tracks = Sides::new(
+                    y_grid.index(ty_max),
+                    x_grid.index(tx_max),
+                    y_grid.index(ty_min),
+                    x_grid.index(tx_min),
+                );
+
+                let tracks_constrained = Sides::new(
+                    y_grid.index(track_top),
+                    x_grid.index(track_right),
+                    y_grid.index(track_bot),
+                    x_grid.index(track_left),
+                );
+
                 let (first_dirs, second_dirs) = match strategy {
                     ExpandToGridStrategy::All => unreachable!(),
-                    ExpandToGridStrategy::Side(first_dir) => (
-                        vec![first_dir],
-                        vec![Side::with_dir(first_dir.edge_dir()).collect()],
-                    ),
-                    ExpandToGridStrategy::Corner(corner) => (
-                        vec![corner.side(Dir::Horiz)],
-                        vec![vec![corner.side(Dir::Vert)]],
-                    ),
+                    ExpandToGridStrategy::Side(first_dir) => {
+                        tracks[first_dir] = tracks_constrained[first_dir];
+                        (
+                            vec![first_dir],
+                            vec![Side::with_dir(first_dir.edge_dir()).collect()],
+                        )
+                    }
+                    ExpandToGridStrategy::Corner(corner) => {
+                        tracks[corner.side(Dir::Horiz)] =
+                            tracks_constrained[corner.side(Dir::Horiz)];
+                        tracks[corner.side(Dir::Vert)] = tracks_constrained[corner.side(Dir::Vert)];
+                        (
+                            vec![corner.side(Dir::Horiz)],
+                            vec![vec![corner.side(Dir::Vert)]],
+                        )
+                    }
                     ExpandToGridStrategy::Minimum => {
                         let horiz_dirs: Vec<Side> = Side::with_dir(Dir::Horiz).collect();
                         let vert_dirs: Vec<Side> = Side::with_dir(Dir::Vert).collect();
@@ -385,13 +444,6 @@ impl GreedyRouter {
                         )
                     }
                 };
-
-                let tracks = Sides::new(
-                    y_grid.index(track_top),
-                    x_grid.index(track_right),
-                    y_grid.index(track_bot),
-                    x_grid.index(track_left),
-                );
                 let mut best_rect = None;
                 let mut best_area = i64::MAX;
                 for (first_dir, second_dirs) in first_dirs.iter().zip(second_dirs.iter()) {

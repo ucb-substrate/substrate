@@ -5,13 +5,13 @@
 use subgeom::bbox::{Bbox, BoundBox};
 use subgeom::orientation::Orientation;
 use subgeom::transform::{Transform, Transformation, Translate};
-use subgeom::{Point, Rect};
+use subgeom::{Point, Rect, Shape};
 
 use super::cell::{
     BusPort, CellPort, Instance, PortConflictStrategy, PortError, PortId, PortMap, PortMapFn,
     TextElement, TransformedPort,
 };
-use super::layers::{LayerBoundBox, LayerPurpose, UserLayer};
+use super::layers::{LayerBoundBox, LayerKey, LayerPurpose, UserLayer};
 use super::{Draw, DrawRef};
 use crate::deps::arcstr::ArcStr;
 use crate::layout::cell::{flatten_recur, Element, Flatten};
@@ -182,6 +182,11 @@ impl Group {
         Ok(())
     }
 
+    #[inline]
+    pub fn port_map(&self) -> &PortMap {
+        &self.ports
+    }
+
     /// Returns an iterator over the bus ports in the cell.
     #[inline]
     pub fn bus_ports(&self) -> impl Iterator<Item = (&ArcStr, &BusPort)> {
@@ -285,6 +290,20 @@ impl Group {
         }
 
         self
+    }
+
+    pub fn shapes_on(&self, layer: LayerKey) -> Box<dyn Iterator<Item = Shape> + '_> {
+        let tf = self.transformation();
+        let recur = self.instances().flat_map(move |inst| {
+            inst.shapes_on(layer)
+                .map(|shape| shape.transform(tf))
+                .collect::<Vec<Shape>>()
+        });
+        let curr = self
+            .elements()
+            .filter(move |elem| elem.layer.layer() == layer)
+            .map(|elem| elem.inner);
+        Box::new(curr.chain(recur))
     }
 }
 

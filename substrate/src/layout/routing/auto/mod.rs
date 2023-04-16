@@ -4,7 +4,7 @@ use itertools::Itertools;
 use subgeom::bbox::BoundBox;
 use subgeom::{Dir, Rect, Sign};
 
-use self::abs::GreedyAbstractRouter;
+use self::abs::{GreedyAbstractRouter, Net};
 use super::tracks::UniformTracks;
 use crate::index::IndexOwned;
 use crate::layout::context::LayoutCtx;
@@ -40,6 +40,7 @@ pub struct GreedyRouter {
     grid_vtracks: UniformTracks,
     grid_htracks: UniformTracks,
     group: Group,
+    net_map: HashMap<String, Net>,
 }
 
 pub struct GreedyRouterConfig {
@@ -138,10 +139,35 @@ impl GreedyRouter {
             grid_vtracks,
             grid_htracks,
             group: Group::new(),
+            net_map: HashMap::new(),
+        }
+    }
+
+    pub fn get_net(&mut self, net: &str) -> Net {
+        if let Some(net) = self.net_map.get(net) {
+            *net
+        } else {
+            let new_net = self.inner.get_unused_net();
+            self.net_map.insert(net.to_string(), new_net);
+            new_net
         }
     }
 
     /// Generates a route between the provided geometries if one exists.
+    pub fn route_with_net(
+        &mut self,
+        ctx: &mut LayoutCtx,
+        src_layer: LayerKey,
+        src: Rect,
+        dst_layer: LayerKey,
+        dst: Rect,
+        net: &str,
+    ) -> crate::error::Result<()> {
+        let net = self.get_net(net);
+        self.route_inner(ctx, src_layer, src, dst_layer, dst, net)
+    }
+
+    /// Generates a route between the provided geometries if one exists on the provided net.
     pub fn route(
         &mut self,
         ctx: &mut LayoutCtx,
@@ -149,6 +175,19 @@ impl GreedyRouter {
         src: Rect,
         dst_layer: LayerKey,
         dst: Rect,
+    ) -> crate::error::Result<()> {
+        let net = self.inner.get_unused_net();
+        self.route_inner(ctx, src_layer, src, dst_layer, dst, net)
+    }
+
+    fn route_inner(
+        &mut self,
+        ctx: &mut LayoutCtx,
+        src_layer: LayerKey,
+        src: Rect,
+        dst_layer: LayerKey,
+        dst: Rect,
+        net: Net,
     ) -> crate::error::Result<()> {
         // src and dst geometry must be contained within the routing area.
         assert!(self.area.bbox().intersection(src.bbox()).into_rect() == src);
@@ -159,63 +198,72 @@ impl GreedyRouter {
         let src_span = self.shrink_to_pos_span(src_layer, src);
         let dst_span = self.shrink_to_pos_span(dst_layer, dst);
 
-        let nodes = self.inner.route(src_span, dst_span)?;
+        let route = self.inner.route_with_net(src_span, dst_span, net)?;
 
-        let runs: Vec<(abs::Layer, AbstractRoute)> = nodes
-            .into_iter()
-            .group_by(|n| n.layer)
-            .into_iter()
-            .map(|(layer, group)| (layer, group.into_iter().collect::<AbstractRoute>()))
-            .collect();
-        let mut rects = Vec::new();
-        for (i, (layer, run)) in runs.iter().enumerate() {
-            let layer = *layer;
-            let dir = self.inner.dir(layer);
-            let (first, last) = (run[0], run[run.len() - 1]);
-            let tid = first.coord(!dir);
-            let track = self.track_span(layer, tid);
-
-            let first = if i > 0 && self.inner.dir(runs[i - 1].0) != dir {
-                self.track_span(runs[i - 1].0, first.coord(dir))
-            } else {
-                self.grid_track(!dir).index(first.coord(dir))
-            };
-
-            let last = if i < runs.len() - 1 && self.inner.dir(runs[i + 1].0) != dir {
-                self.track_span(runs[i + 1].0, last.coord(dir))
-            } else {
-                self.grid_track(!dir).index(last.coord(dir))
-            };
-
-            let rect = Rect::span_builder()
-                .with(dir, first.union(last))
-                .with(!dir, track)
-                .build();
-
-            rects.push((layer, rect));
-        }
-
-        let mut prev = None;
-        for (layer, rect) in rects {
-            let layer_key = self.layer(layer);
-            self.group.add_rect(layer_key, rect);
-
-            if let Some((prev_layer, prev_rect)) = prev {
-                if prev_layer != layer {
-                    let (bot, top) = if prev_layer < layer {
-                        (prev_layer, layer)
-                    } else {
-                        (layer, prev_layer)
-                    };
-                    let viap = ViaParams::builder()
-                        .layers(self.layer(bot), self.layer(top))
-                        .geometry(prev_rect, rect)
-                        .build();
-                    let via = ctx.instantiate::<Via>(&viap)?;
-                    self.group.add_instance(via);
-                }
+        let mut counter = 0;
+        while counter < route.len() {
+            let mut subroute = vec![route[counter]];
+            counter += 1;
+            while counter < route.len() && !route[counter].is_jump() {
+                subroute.push(route[counter]);
+                counter += 1;
             }
-            prev = Some((layer, rect));
+            let runs: Vec<(abs::Layer, AbstractRoute)> = subroute
+                .into_iter()
+                .group_by(|n| n.layer)
+                .into_iter()
+                .map(|(layer, group)| (layer, group.into_iter().collect::<AbstractRoute>()))
+                .collect();
+            let mut rects = Vec::new();
+            for (i, (layer, run)) in runs.iter().enumerate() {
+                let layer = *layer;
+                let dir = self.inner.dir(layer);
+                let (first, last) = (run[0], run[run.len() - 1]);
+                let tid = first.coord(!dir);
+                let track = self.track_span(layer, tid);
+
+                let first = if i > 0 && self.inner.dir(runs[i - 1].0) != dir {
+                    self.track_span(runs[i - 1].0, first.coord(dir))
+                } else {
+                    self.grid_track(!dir).index(first.coord(dir))
+                };
+
+                let last = if i < runs.len() - 1 && self.inner.dir(runs[i + 1].0) != dir {
+                    self.track_span(runs[i + 1].0, last.coord(dir))
+                } else {
+                    self.grid_track(!dir).index(last.coord(dir))
+                };
+
+                let rect = Rect::span_builder()
+                    .with(dir, first.union(last))
+                    .with(!dir, track)
+                    .build();
+
+                rects.push((layer, rect));
+            }
+
+            let mut prev = None;
+            for (layer, rect) in rects {
+                let layer_key = self.layer(layer);
+                self.group.add_rect(layer_key, rect);
+
+                if let Some((prev_layer, prev_rect)) = prev {
+                    if prev_layer != layer {
+                        let (bot, top) = if prev_layer < layer {
+                            (prev_layer, layer)
+                        } else {
+                            (layer, prev_layer)
+                        };
+                        let viap = ViaParams::builder()
+                            .layers(self.layer(bot), self.layer(top))
+                            .geometry(prev_rect, rect)
+                            .build();
+                        let via = ctx.instantiate::<Via>(&viap)?;
+                        self.group.add_instance(via);
+                    }
+                }
+                prev = Some((layer, rect));
+            }
         }
 
         Ok(())
@@ -261,12 +309,21 @@ impl GreedyRouter {
 
     pub fn block(&mut self, layer: LayerKey, rect: Rect) {
         let span = self.expand_to_pos_span(layer, rect);
-        self.inner.block_span(self.abs_layer(layer), span);
+        self.inner.block_span(span);
     }
 
     pub fn block_with_shrink(&mut self, layer: LayerKey, rect: Rect) {
         let span = self.shrink_to_pos_span(layer, rect);
-        self.inner.block_span(self.abs_layer(layer), span);
+        self.inner.block_span(span);
+    }
+
+    pub fn occupy(&mut self, layer: LayerKey, rect: Rect, net: &str) -> crate::error::Result<()> {
+        let net = self.get_net(net);
+        let span = self.expand_to_pos_span(layer, rect);
+        self.inner.block_span_for_net(span, net);
+        let span = self.shrink_to_pos_span(layer, rect);
+        self.inner.occupy_span(span, net)?;
+        Ok(())
     }
 
     fn abs_layer(&self, layer: LayerKey) -> abs::Layer {
