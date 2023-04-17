@@ -390,6 +390,8 @@ impl AbstractNetInfo {
 pub struct GreedyAbstractRouter {
     nets: AbstractNetInfo,
     layers: Vec<AbstractLayerInfo>,
+    tx: usize,
+    ty: usize,
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -431,6 +433,8 @@ impl GreedyAbstractRouter {
                     grid: Grid::init(tx, ty, State::Empty),
                 })
                 .collect(),
+            tx,
+            ty,
         }
     }
 
@@ -493,6 +497,16 @@ impl GreedyAbstractRouter {
         self.nets.get_unused_net()
     }
 
+    fn clip_grid_index(&self, index: usize, dir: Dir) -> usize {
+        std::cmp::min(
+            index,
+            match dir {
+                Dir::Horiz => self.tx - 1,
+                Dir::Vert => self.ty - 1,
+            },
+        )
+    }
+
     fn block_single_inner(&mut self, pos: Pos, net: Option<Net>) {
         let s = self.grid_mut(pos.layer).get_mut(pos.tx, pos.ty).unwrap();
         *s = match s {
@@ -515,8 +529,8 @@ impl GreedyAbstractRouter {
     }
 
     fn block_span_inner(&mut self, span: PosSpan, net: Option<Net>) {
-        for tx in span.tx_min..=span.tx_max {
-            for ty in span.ty_min..=span.ty_max {
+        for tx in span.tx_min..=self.clip_grid_index(span.tx_max, Dir::Horiz) {
+            for ty in span.ty_min..=self.clip_grid_index(span.ty_max, Dir::Vert) {
                 let pos = Pos::new(span.layer, tx, ty);
                 self.block_single_inner(pos, net);
             }
@@ -592,8 +606,8 @@ impl GreedyAbstractRouter {
     }
     pub fn occupy_span(&mut self, span: PosSpan, net: Net) -> Result<()> {
         let mut groups = Vec::new();
-        for tx in span.tx_min..=span.tx_max {
-            for ty in span.ty_min..=span.ty_max {
+        for tx in span.tx_min..=self.clip_grid_index(span.tx_max, Dir::Horiz) {
+            for ty in span.ty_min..=self.clip_grid_index(span.ty_max, Dir::Vert) {
                 let pos = Pos::new(span.layer, tx, ty);
                 self.check_occupy(pos, net)?;
                 if let State::Occupied { conn_group, .. } =
@@ -613,8 +627,8 @@ impl GreedyAbstractRouter {
             }
             groups[0]
         };
-        for tx in span.tx_min..=span.tx_max {
-            for ty in span.ty_min..=span.ty_max {
+        for tx in span.tx_min..=self.clip_grid_index(span.tx_max, Dir::Horiz) {
+            for ty in span.ty_min..=self.clip_grid_index(span.ty_max, Dir::Vert) {
                 let pos = Pos::new(span.layer, tx, ty);
                 self.occupy_inner(pos, net, group);
             }
@@ -746,8 +760,8 @@ impl GreedyAbstractRouter {
     fn span_next(&self, span: PosSpan) -> Vec<Node> {
         let mut next =
             Vec::with_capacity((span.tx_max - span.tx_min + 1) * (span.ty_max - span.ty_min + 1));
-        for tx in span.tx_min..=span.tx_max {
-            for ty in span.ty_min..=span.ty_max {
+        for tx in span.tx_min..=self.clip_grid_index(span.tx_max, Dir::Horiz) {
+            for ty in span.ty_min..=self.clip_grid_index(span.ty_max, Dir::Vert) {
                 let pos = Pos::new(span.layer, tx, ty);
                 next.push(Node::Pos(pos));
             }

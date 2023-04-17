@@ -765,6 +765,21 @@ impl Edge {
         self.span
     }
 
+    /// Returns an `Edge` with the same properties as the provided `Edge` but with a new span.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use subgeom::*;
+    /// let edge = Edge::new(Side::Left, 20, Span::new(40, 100));
+    /// assert_eq!(edge.span(), Span::new(40, 100));
+    /// let edge_new = edge.with_span(Span::new(20, 100));
+    /// assert_eq!(edge_new.span(), Span::new(20, 100));
+    /// ```
+    pub fn with_span(&self, span: Span) -> Edge {
+        Edge { span, ..*self }
+    }
+
     /// The direction perpendicular to the edge.
     ///
     /// For left/right edges, this will be [`Dir::Horiz`].
