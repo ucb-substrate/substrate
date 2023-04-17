@@ -23,6 +23,12 @@ jobs:
         with:
           toolchain: stable
           components: rust-src
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@master
+        id: toolchain
+        with:
+          toolchain: nightly
+          components: rust-src
       - name: Cache workspace
         uses: Swatinem/rust-cache@v2
         with:
