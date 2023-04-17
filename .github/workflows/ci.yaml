@@ -22,13 +22,13 @@ jobs:
         id: toolchain
         with:
           toolchain: stable
-          components: rust-src
+          components: rust-src, clippy
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@master
         id: toolchain-nightly
         with:
           toolchain: nightly
-          components: rust-src
+          components: rust-fmt
       - name: Cache workspace
         uses: Swatinem/rust-cache@v2
         with:
