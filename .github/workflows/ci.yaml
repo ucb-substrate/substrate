@@ -6,14 +6,27 @@ on:
       - 'main'
   pull_request:
 
+env:
+    CARGO_TERM_COLOR: always
+
 jobs:
   check-workspace:
     name: Build, lint, and test
-    runs-on: [self-hosted]
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v2
         with:
           submodules: 'recursive'
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        id: toolchain
+        with:
+          toolchain: ${{ matrix.platform.toolchain }}
+          components: rust-src
+      - name: Cache workspace
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ steps.toolchain.outputs.cachekey }}
       - name: Check formatting
         run: |
           cargo +nightly fmt --check
