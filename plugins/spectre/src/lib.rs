@@ -68,74 +68,47 @@ mod tests;
 pub struct Spectre {}
 
 struct SpectreOutputParser<'a> {
-    num_ac: usize,
-    num_tran: usize,
-    current_analysis: usize,
     raw_output_dir: &'a Path,
 }
 
 impl<'a> SpectreOutputParser<'a> {
     fn new(raw_output_dir: &'a Path) -> Self {
-        Self {
-            num_ac: 0,
-            num_tran: 0,
-            current_analysis: 0,
-            raw_output_dir,
-        }
+        Self { raw_output_dir }
     }
 
-    fn parse_next_analysis(&mut self, input: &SimInput) -> Result<Option<AnalysisData>> {
+    fn parse_analysis(&mut self, num: usize, input: &SimInput) -> Result<AnalysisData> {
         let analyses = &input.analyses;
-        if self.current_analysis == analyses.len() {
-            return Ok(None);
-        }
+        let analysis = &analyses[num];
 
-        let analysis = &analyses[self.current_analysis];
-
-        let data = if output_format_name(&input.output_format) == "psfascii" {
-            // Spectre chooses this file name by default
-            let file_name = match analysis.analysis_type() {
-                AnalysisType::Ac => {
-                    self.num_ac += 1;
-                    if self.num_ac == 1 {
-                        "frequencySweep.ac".to_string()
-                    } else {
-                        format!("ac{}.ac", self.num_ac)
-                    }
-                }
-                AnalysisType::Tran => {
-                    self.num_tran += 1;
-                    if self.num_tran == 1 {
-                        "timeSweep.tran.tran".to_string()
-                    } else {
-                        format!("tran{}.tran.tran", self.num_tran)
-                    }
-                }
-                _ => {
-                    bail!("spectre plugin only supports ac and transient simulations");
-                }
-            };
-            let psf_path = self.raw_output_dir.join(file_name);
-            let psf = substrate::io::read_to_string(psf_path)?;
-            let ast = psf_ascii::parser::frontend::parse(&psf)?;
-            match analysis.analysis_type() {
-                AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
-                AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
-                _ => bail!("spectre plugin only supports ac and transient simulations"),
+        // Spectre chooses this file name by default
+        let file_name = match analysis.analysis_type() {
+            AnalysisType::Ac => {
+                format!("analysis{num}.ac")
             }
-        } else {
-            return Ok(None);
+            AnalysisType::Tran => {
+                format!("analysis{num}.tran.tran")
+            }
+            _ => {
+                bail!("spectre plugin only supports ac and transient simulations");
+            }
         };
-
-        self.current_analysis += 1;
-
-        Ok(Some(data))
+        let psf_path = self.raw_output_dir.join(file_name);
+        let psf = substrate::io::read_to_string(psf_path)?;
+        let ast = psf_ascii::parser::frontend::parse(&psf)?;
+        Ok(match analysis.analysis_type() {
+            AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
+            AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
+            _ => bail!("spectre plugin only supports ac and transient simulations"),
+        })
     }
 
     fn parse_analyses(mut self, input: &SimInput) -> Result<Vec<AnalysisData>> {
         let mut analyses = Vec::new();
-        while let Some(analysis) = self.parse_next_analysis(input)? {
-            analyses.push(analysis);
+        if output_format_name(&input.output_format) == "psfascii" {
+            for i in 0..input.analyses.len() {
+                let analysis = self.parse_analysis(i, input)?;
+                analyses.push(analysis);
+            }
         }
         Ok(analyses)
     }
@@ -317,30 +290,39 @@ fn get_analyses(input: &[Analysis]) -> Vec<String> {
 
 fn analysis_line(input: &Analysis, num: usize) -> String {
     match input {
-        Analysis::Op(_) => String::from(".op"),
+        Analysis::Op(_) => format!("analysis{num} dc"),
         Analysis::Tran(a) => {
             let strobe = if let Some(strobe) = a.strobe_period {
                 format!(" strobeperiod={strobe}")
             } else {
                 String::new()
             };
-            format!("simulator lang=spectre\nanalysis{num} tran step={} stop={} start={}{}\nsimulator lang=spice", a.step, a.stop, a.start, strobe)
+            format!("analysis{num} tran step={} stop={} start={}{}", a.step, a.stop, a.start, strobe)
         }
         Analysis::Ac(a) => format!(
-            ".ac {} {} {} {}",
-            fmt_sweep_mode(a.sweep),
-            a.points,
+            "analysis{num} ac start={} stop={} {}",
             a.fstart,
-            a.fstop
+            a.fstop,
+            fmt_sweep_mode(a.sweep, a.points),
         ),
-        Analysis::Dc(a) => format!(".dc {} {} {} {}", a.sweep, a.start, a.stop, a.step),
+        Analysis::Dc(a) => format!(
+            "analysis{num} dc {} start={} stop={} step={}",
+            a.sweep, a.start, a.stop, a.step
+        ),
     }
 }
 
-fn fmt_sweep_mode(mode: SweepMode) -> &'static str {
+fn fmt_sweep_mode(mode: SweepMode, points: usize) -> String {
     match mode {
-        SweepMode::Dec => "dec",
-        SweepMode::Oct => "oct",
-        SweepMode::Lin => "lin",
+        SweepMode::Dec => format!("dec={points}"),
+        SweepMode::Oct => {
+            // Oct isn't directly supported by Spectre; use a log sweep instead.
+            log::warn!(
+                "Unsupported sweep mode `{:?}`; using a log sweep instead",
+                mode
+            );
+            format!("log={points}")
+        }
+        SweepMode::Lin => format!("lin={points}"),
     }
 }

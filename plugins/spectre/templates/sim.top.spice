@@ -21,8 +21,12 @@ simulator lang=spice
 {% endfor %}
 
 * Analyses
+simulator lang=spectre
+
 {% for analysis in analyses -%}
 {{ analysis }}
 {% endfor %}
+
+simulator lang=spice
 .end
 
