@@ -17,18 +17,18 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: 'recursive'
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        id: toolchain
-        with:
-          toolchain: stable
-          components: rust-src, clippy
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
         id: toolchain-nightly
         with:
           toolchain: nightly
           components: rustfmt
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        id: toolchain
+        with:
+          toolchain: stable
+          components: rust-src, clippy
       - name: Cache workspace
         uses: Swatinem/rust-cache@v2
         with:
