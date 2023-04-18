@@ -9,6 +9,7 @@ use super::context::ModuleKey;
 use super::signal::{SignalInfo, SignalKey, Slice};
 use crate::deps::arcstr::ArcStr;
 use crate::error::{ErrorSource, Result};
+use crate::verification::timing::TimingView;
 
 #[derive(Clone, Debug)]
 pub struct Module {
@@ -19,6 +20,7 @@ pub struct Module {
     parameters: HashMap<ArcStr, Param>,
     signals: SlotMap<SignalKey, SignalInfo>,
     raw_spice: Option<ArcStr>,
+    timing: TimingView,
 }
 
 impl Module {
@@ -31,6 +33,7 @@ impl Module {
             parameters: HashMap::new(),
             signals: SlotMap::with_key(),
             raw_spice: None,
+            timing: Default::default(),
         }
     }
 
@@ -105,6 +108,16 @@ impl Module {
     #[inline]
     pub(crate) fn raw_spice(&self) -> Option<&str> {
         self.raw_spice.as_deref()
+    }
+
+    #[inline]
+    pub(crate) fn timing(&self) -> &TimingView {
+        &self.timing
+    }
+
+    #[inline]
+    pub(crate) fn timing_mut(&mut self) -> &mut TimingView {
+        &mut self.timing
     }
 
     #[inline]

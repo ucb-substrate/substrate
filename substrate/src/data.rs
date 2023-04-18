@@ -42,6 +42,7 @@ use crate::verification::pex::{PexInput, PexOutput, PexTool};
 use crate::verification::simulation::context::{PostSimCtx, PreSimCtx};
 use crate::verification::simulation::testbench::Testbench;
 use crate::verification::simulation::{SimInput, SimOpts, Simulator};
+use crate::verification::timing::context::TimingCtx;
 
 pub(crate) struct SubstrateData {
     schematics: SchematicData,
@@ -795,15 +796,22 @@ impl SubstrateCtx {
         ctx.module.set_name(component.name());
         with_err_context(component.schematic(&mut ctx), || {
             ErrorContext::GenComponent {
-                name,
+                name: name.clone(),
                 type_name: std::any::type_name::<T>().into(),
                 view: View::Schematic,
             }
         })?;
 
+        let mut ctx = TimingCtx::new(ctx.module);
+        with_err_context(component.timing(&mut ctx), || ErrorContext::GenComponent {
+            name,
+            type_name: std::any::type_name::<T>().into(),
+            view: View::Timing,
+        })?;
+
         let module = {
             let mut inner = self.write();
-            inner.schematics.set_module(ctx.module)
+            inner.schematics.set_module(ctx.into_inner())
         };
 
         Ok(module)

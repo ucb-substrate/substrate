@@ -12,6 +12,7 @@ use crate::layout::straps::PowerStrapError;
 use crate::pdk::corner::error::ProcessCornerError;
 use crate::pdk::mos::error::MosError;
 use crate::pdk::stdcell::error::StdCellError;
+use crate::schematic::circuit::PortError as SchematicPortError;
 use crate::schematic::netlist::interface::NetlistError;
 use crate::verification::simulation::bits::BitConvError;
 
@@ -217,8 +218,11 @@ pub enum ErrorSource {
     #[error("port index out of bounds: {index} is out of bounds for port with width {width}")]
     PortIndexOutOfBounds { width: usize, index: usize },
 
-    #[error("error accessing port: {0}")]
-    Port(#[from] PortError),
+    #[error("error accessing layout port: {0}")]
+    LayoutPort(#[from] PortError),
+
+    #[error("error accessing schematic port: {0}")]
+    SchematicPort(#[from] SchematicPortError),
 
     #[error("error performing automatic routing: {0}")]
     AutoRouting(#[from] routing::auto::error::Error),

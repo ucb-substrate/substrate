@@ -27,10 +27,41 @@ pub struct Slice {
     range: SliceRange,
 }
 
+/// A slice with a width of 1.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub struct SliceOne {
+    signal: SignalKey,
+    idx: usize,
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct SliceRange {
     start: usize,
     end: usize,
+}
+
+impl SliceOne {
+    #[inline]
+    pub fn new(signal: SignalKey, idx: usize) -> Self {
+        Self { signal, idx }
+    }
+
+    pub fn from_slice(slice: Slice) -> Self {
+        assert_eq!(slice.width(), 1);
+        Self {
+            signal: slice.signal,
+            idx: slice.range.start,
+        }
+    }
+}
+
+impl From<SliceOne> for Slice {
+    fn from(value: SliceOne) -> Self {
+        Self {
+            signal: value.signal,
+            range: SliceRange::new(value.idx, value.idx + 1),
+        }
+    }
 }
 
 impl SliceRange {
@@ -116,6 +147,11 @@ impl Slice {
     #[inline]
     pub fn signal(&self) -> SignalKey {
         self.signal
+    }
+
+    #[inline]
+    pub fn into_single(self) -> SliceOne {
+        SliceOne::from_slice(self)
     }
 }
 
