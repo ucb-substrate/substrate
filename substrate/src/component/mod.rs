@@ -10,6 +10,7 @@ use crate::data::SubstrateCtx;
 use crate::error::{ErrorSource, Result};
 use crate::layout::context::LayoutCtx;
 use crate::schematic::context::SchematicCtx;
+use crate::verification::timing::context::TimingCtx;
 
 pub mod error;
 
@@ -91,6 +92,16 @@ pub trait Component: Any {
     #[allow(unused_variables)]
     fn layout(&self, ctx: &mut LayoutCtx) -> Result<()> {
         Err(ErrorSource::Component(error::Error::ViewUnsupported(View::Layout)).into())
+    }
+
+    /// Specifies this component's timing constraints.
+    #[allow(unused_variables)]
+    fn timing(&self, ctx: &mut TimingCtx) -> Result<()> {
+        // We assume that a component that does not override this function
+        // does not have any timing constraints.
+        //
+        // Thus, the default is to return no timing constraints, rather than an error.
+        Ok(())
     }
 }
 
