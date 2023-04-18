@@ -297,7 +297,10 @@ fn analysis_line(input: &Analysis, num: usize) -> String {
             } else {
                 String::new()
             };
-            format!("analysis{num} tran step={} stop={} start={}{}", a.step, a.stop, a.start, strobe)
+            format!(
+                "analysis{num} tran step={} stop={} start={}{}",
+                a.step, a.stop, a.start, strobe
+            )
         }
         Analysis::Ac(a) => format!(
             "analysis{num} ac start={} stop={} {}",
