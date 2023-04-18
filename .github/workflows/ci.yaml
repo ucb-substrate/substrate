@@ -42,7 +42,7 @@ jobs:
         id: toolchain
         with:
           toolchain: stable
-          components: rust-src, clippy
+          components: clippy
       - name: Cache workspace
         uses: Swatinem/rust-cache@v2
         with:
