@@ -13,6 +13,7 @@ tera = "1.18.1"
 spice_rawfile = { path = "../spice_rawfile" }
 anyhow = "1.0.70"
 psf_ascii = { git = "https://github.com/rahulk29/psf_ascii.git", branch = "master" }
+log = "0.4"
 
 [dev-dependencies]
 approx = "0.5.1"
