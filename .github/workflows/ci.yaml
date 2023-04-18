@@ -21,6 +21,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ngspice
+      - name: Clone external dependencies
+        uses: actions/checkout@v2
+        with:
+          repository: substrate-labs/skywater-pdk
+          path: skywater-pdk
+      - name: Update submodules
+        working_directory: skywater-pdk
+        run: |
+          git submodule update --init ./libraries/sky130_fd_pr/latest
+          git submodule update --init ./libraries/sky130_fd_sc_hd/latest
       - name: Install nightly toolchain
         uses: dtolnay/rust-toolchain@nightly
         id: toolchain-nightly
@@ -46,3 +56,5 @@ jobs:
       - name: Test
         shell: bash
         run: make test
+        env:
+          SKY130_OPEN_PDK_ROOT: ${{ github.workspace }}/skywater-pdk
