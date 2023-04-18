@@ -27,7 +27,7 @@ jobs:
           repository: substrate-labs/skywater-pdk
           path: skywater-pdk
       - name: Update submodules
-        working_directory: skywater-pdk
+        working-directory: skywater-pdk
         run: |
           git submodule update --init ./libraries/sky130_fd_pr/latest
           git submodule update --init ./libraries/sky130_fd_sc_hd/latest
