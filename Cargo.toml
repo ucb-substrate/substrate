@@ -13,7 +13,6 @@ members = [
     "plugins/spectre",
     "plugins/spice_rawfile",
     "plugins/subspice",
-    "plugins/sub_calibre",
     "scripts/mergegds",
     "substrate",
 ]
