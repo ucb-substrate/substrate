@@ -17,8 +17,8 @@ new_key_type! {
 /// Signal paths are preserved even after automatic module and instance renaming.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct SignalPathBuf {
-    pub(crate) insts: Vec<InstanceKey>,
-    pub(crate) slice: SliceOne,
+    insts: Vec<InstanceKey>,
+    slice: Slice,
 }
 
 /// A path to a node in a circuit, starting from the top-level module.
@@ -28,9 +28,9 @@ pub struct SignalPathBuf {
 /// `NamedSignalPathBuf`s are NOT preserved after automatic module and instance renaming.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct NamedSignalPathBuf {
-    pub insts: Vec<ArcStr>,
-    pub signal: ArcStr,
-    pub idx: Option<usize>,
+    insts: Vec<ArcStr>,
+    signal: ArcStr,
+    idk: usize,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -53,8 +53,8 @@ pub struct Slice {
 /// A slice with a width of 1.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct SliceOne {
-    pub(crate) signal: SignalKey,
-    pub(crate) idx: usize,
+    signal: SignalKey,
+    idx: usize,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -330,7 +330,7 @@ impl Signal {
 
 impl SignalPathBuf {
     #[inline]
-    pub fn new(insts: Vec<InstanceKey>, slice: SliceOne) -> Self {
+    pub fn new(insts: Vec<InstanceKey>, slice: Slice) -> Self {
         Self { insts, slice }
     }
 }

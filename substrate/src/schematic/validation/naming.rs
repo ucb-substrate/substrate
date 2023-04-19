@@ -160,7 +160,7 @@ impl<'a> NamingValidator<'a> {
             ErrorCause::DuplicateModuleName { name }
         });
 
-        let mut inst_names = HashSet::with_capacity(module.instances().len());
+        let mut inst_names = HashSet::with_capacity(module.instances().count());
         for instance in module.instances() {
             self.validate_name(instance.name(), &mut inst_names, loc, |name| {
                 ErrorCause::DuplicateInstanceName { name }

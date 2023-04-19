@@ -55,6 +55,23 @@ impl Simulator for Ngspice {
 
         Ok(out)
     }
+
+    fn node_voltage_string(
+        &self,
+        path: &substrate::schematic::signal::NamedSignalPathBuf,
+    ) -> String {
+        let mut s = String::new();
+        s.push_str("v(");
+        for inst in path.insts.iter() {
+            s.push_str(&inst);
+        }
+        s.push_str(&path.signal);
+        if let Some(idx) = path.idx {
+            s.push_str(&format!("[{idx}]"));
+        }
+        s.push(')');
+        s
+    }
 }
 
 fn get_analyses(input: &[Analysis]) -> Vec<String> {

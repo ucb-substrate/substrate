@@ -278,6 +278,21 @@ impl Simulator for Spectre {
         let data = run_spectre(&input)?;
         Ok(SimOutput { data })
     }
+
+    fn node_voltage_string(
+        &self,
+        path: &substrate::schematic::signal::NamedSignalPathBuf,
+    ) -> String {
+        let mut s = String::new();
+        for inst in path.insts.iter() {
+            s.push_str(&inst);
+        }
+        s.push_str(&path.signal);
+        if let Some(idx) = path.idx {
+            s.push_str(&format!("[{idx}]"));
+        }
+        s
+    }
 }
 
 fn get_analyses(input: &[Analysis]) -> Vec<String> {

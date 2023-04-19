@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use slotmap::SlotMap;
 use subspice::parser::SubcktLine;
 
-use super::circuit::{Direction, Instance, Param, Port, PortError, PortInfo};
+use super::circuit::{Direction, Instance, InstanceKey, Param, Port, PortError, PortInfo};
 use super::context::ModuleKey;
 use super::signal::{SignalInfo, SignalKey, Slice};
 use crate::deps::arcstr::ArcStr;
@@ -16,7 +16,7 @@ pub struct Module {
     pub(crate) id: ModuleKey,
     name: ArcStr,
     ports: Vec<Port>,
-    instances: Vec<Instance>,
+    instances: SlotMap<InstanceKey, Instance>,
     parameters: HashMap<ArcStr, Param>,
     signals: SlotMap<SignalKey, SignalInfo>,
     raw_spice: Option<ArcStr>,
@@ -29,7 +29,7 @@ impl Module {
             id,
             name: arcstr::literal!("unnamed"),
             ports: Vec::new(),
-            instances: Vec::new(),
+            instances: SlotMap::with_key(),
             parameters: HashMap::new(),
             signals: SlotMap::with_key(),
             raw_spice: None,
@@ -63,22 +63,32 @@ impl Module {
 
     #[inline]
     pub(crate) fn add_instance(&mut self, inst: Instance) {
-        self.instances.push(inst);
+        self.instances.insert(inst);
     }
 
     #[inline]
-    pub fn instances(&self) -> &[Instance] {
-        &self.instances
+    pub fn instances_iter(&self) -> impl Iterator<Item = (InstanceKey, &Instance)> {
+        self.instances.iter()
     }
 
     #[inline]
-    pub(crate) fn instances_mut(&mut self) -> &mut [Instance] {
-        &mut self.instances
+    pub fn instances(&self) -> impl Iterator<Item = &Instance> {
+        self.instances.values()
+    }
+
+    #[inline]
+    pub fn instances_mut(&mut self) -> impl Iterator<Item = &mut Instance> {
+        self.instances.values_mut()
     }
 
     #[inline]
     pub fn name(&self) -> &ArcStr {
         &self.name
+    }
+
+    #[inline]
+    pub(crate) fn instance_map(&self) -> &SlotMap<InstanceKey, Instance> {
+        &self.instances
     }
 
     #[inline]

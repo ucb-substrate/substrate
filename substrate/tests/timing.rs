@@ -1,5 +1,6 @@
 use common::{out_path, setup_ctx};
 use substrate::component::{Component, NoParams};
+use substrate::pdk::corner::Pvt;
 use substrate::pdk::stdcell::StdCell;
 use substrate::schematic::circuit::Direction;
 use substrate::verification::simulation::waveform::EdgeDir;
@@ -77,9 +78,13 @@ impl Component for Register {
             ])
             .build()
             .unwrap();
+        let corners = ctx.inner().corner_db();
+        let tt = corners.try_default_corner()?;
+        let pvt = Pvt::new(tt.clone(), 1.8, 27.0);
         ctx.add_constraint(
             SetupHoldConstraint::builder()
-                .port(d)
+                .pvt(pvt)
+                .port(d.into_single())
                 .related_port(clk.into_single())
                 .related_port_transition(EdgeDir::Rising)
                 .kind(ConstraintKind::Setup)

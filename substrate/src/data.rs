@@ -802,7 +802,7 @@ impl SubstrateCtx {
             }
         })?;
 
-        let mut ctx = TimingCtx::new(ctx.module);
+        let mut ctx = TimingCtx::new(ctx.module, self.clone());
         with_err_context(component.timing(&mut ctx), || ErrorContext::GenComponent {
             name,
             type_name: std::any::type_name::<T>().into(),
@@ -811,7 +811,7 @@ impl SubstrateCtx {
 
         let module = {
             let mut inner = self.write();
-            inner.schematics.set_module(ctx.into_inner())
+            inner.schematics.set_module(ctx.into_module())
         };
 
         Ok(module)

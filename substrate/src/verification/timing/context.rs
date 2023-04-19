@@ -1,4 +1,5 @@
 use super::{TimingConstraint, TimingView};
+use crate::data::SubstrateCtx;
 use crate::schematic::circuit::PortError;
 use crate::schematic::module::Module;
 use crate::schematic::signal::Slice;
@@ -6,6 +7,7 @@ use crate::schematic::signal::Slice;
 #[derive(Clone)]
 pub struct TimingCtx {
     module: Module,
+    inner: SubstrateCtx,
 }
 
 impl TimingCtx {
@@ -14,12 +16,17 @@ impl TimingCtx {
     }
 
     #[inline]
-    pub fn new(module: Module) -> Self {
-        Self { module }
+    pub(crate) fn new(module: Module, inner: SubstrateCtx) -> Self {
+        Self { module, inner }
     }
 
     #[inline]
-    pub(crate) fn into_inner(self) -> Module {
+    pub fn inner(&self) -> &SubstrateCtx {
+        &self.inner
+    }
+
+    #[inline]
+    pub(crate) fn into_module(self) -> Module {
         self.module
     }
 

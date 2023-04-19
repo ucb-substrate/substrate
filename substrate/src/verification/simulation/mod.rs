@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use self::waveform::{binary_search_before, SharedWaveform};
 use crate::error::Result;
+use crate::schematic::signal::NamedSignalPathBuf;
 use crate::units::SiValue;
 
 pub mod bits;
@@ -321,6 +322,7 @@ pub trait Simulator {
     where
         Self: Sized;
     fn simulate(&self, input: SimInput) -> Result<SimOutput>;
+    fn node_voltage_string(&self, path: &NamedSignalPathBuf) -> String;
 }
 
 impl Analysis {
