@@ -108,5 +108,16 @@ mod tests {
         let (idx, val) = search(&v, |e| e.cmp(&9).into(), SearchSide::Before).unwrap();
         assert_eq!(*val, 9);
         assert_eq!(idx, 8);
+
+        let (idx, val) = search(&v, |e| e.cmp(&15).into(), SearchSide::Equal).unwrap();
+        assert_eq!(*val, 15);
+        assert_eq!(idx, 11);
+
+        let (idx, val) = search(&v, |e| e.cmp(&4).into(), SearchSide::Equal).unwrap();
+        assert_eq!(*val, 4);
+        assert_eq!(idx, 3);
+
+        let result = search(&v, |e| e.cmp(&10).into(), SearchSide::Equal);
+        assert!(result.is_none());
     }
 }
