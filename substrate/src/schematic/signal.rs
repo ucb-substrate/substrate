@@ -37,6 +37,8 @@ pub struct NamedSignalPathBuf {
 pub struct SignalInfo {
     name: ArcStr,
     width: usize,
+    /// Whether or not this signal is a port.
+    is_port: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -120,10 +122,11 @@ impl IntoIterator for SliceRange {
 
 impl SignalInfo {
     #[inline]
-    pub fn new(name: impl Into<ArcStr>, width: usize) -> Self {
+    pub fn new(name: impl Into<ArcStr>, width: usize, is_port: bool) -> Self {
         Self {
             name: name.into(),
             width,
+            is_port,
         }
     }
 
@@ -140,6 +143,11 @@ impl SignalInfo {
     #[inline]
     pub fn set_name(&mut self, name: impl Into<ArcStr>) {
         self.name = name.into();
+    }
+
+    #[inline]
+    pub fn is_port(&self) -> bool {
+        self.is_port
     }
 }
 
@@ -280,6 +288,21 @@ impl IndexOwned<RangeToInclusive<usize>> for SliceRange {
     fn index(&self, index: RangeToInclusive<usize>) -> Self::Output {
         assert!(self.start + index.end < self.end, "index out of bounds");
         Self::new(self.start, self.start + index.end + 1)
+    }
+}
+
+impl IndexOwned<usize> for Signal {
+    type Output = Slice;
+
+    fn index(&self, mut index: usize) -> Self::Output {
+        for part in self.parts.iter() {
+            let width = part.width();
+            if index < width {
+                return part.index(index);
+            }
+            index -= width;
+        }
+        panic!("index {index} out of bounds for signal");
     }
 }
 

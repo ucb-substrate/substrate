@@ -44,7 +44,7 @@ impl Module {
         width: usize,
         direction: Direction,
     ) -> Slice {
-        let key = self.signals.insert(SignalInfo::new(name, width));
+        let key = self.signals.insert(SignalInfo::new(name, width, true));
         let port = Port::new(key, direction);
         self.ports.push(port);
         Slice::with_width(key, width)
@@ -52,7 +52,7 @@ impl Module {
 
     #[inline]
     pub(crate) fn add_signal(&mut self, name: impl Into<ArcStr>, width: usize) -> Slice {
-        let key = self.signals.insert(SignalInfo::new(name, width));
+        let key = self.signals.insert(SignalInfo::new(name, width, false));
         Slice::with_width(key, width)
     }
 
@@ -322,7 +322,7 @@ impl ExternalModuleBuilder {
 
     #[inline]
     pub fn add_port(mut self, name: impl Into<ArcStr>, width: usize, direction: Direction) -> Self {
-        let key = self.signals.insert(SignalInfo::new(name, width));
+        let key = self.signals.insert(SignalInfo::new(name, width, true));
         let port = Port::new(key, direction);
         self.ports.push(port);
         self

@@ -21,7 +21,7 @@ use crate::layout::layers::{Layers, LayersRef};
 use crate::layout::LayoutFormat;
 use crate::log;
 use crate::pdk::corner::error::ProcessCornerError;
-use crate::pdk::corner::{CornerDb, CornerEntry};
+use crate::pdk::corner::{CornerDb, CornerEntry, Pvt};
 use crate::pdk::mos::db::MosDb;
 use crate::pdk::stdcell::StdCellDb;
 use crate::pdk::Pdk;
@@ -41,7 +41,7 @@ use crate::verification::lvs::{LvsInput, LvsOutput, LvsTool};
 use crate::verification::pex::{PexInput, PexOutput, PexTool};
 use crate::verification::simulation::context::{PostSimCtx, PreSimCtx};
 use crate::verification::simulation::testbench::Testbench;
-use crate::verification::simulation::{SimInput, SimOpts, Simulator};
+use crate::verification::simulation::{Save, SimInput, SimOpts, Simulator};
 use crate::verification::timing::context::TimingCtx;
 
 pub(crate) struct SubstrateData {
@@ -110,6 +110,14 @@ pub(crate) struct InnerWriteSchematicArgs<W> {
     flatten_top: FlattenTop,
     purpose: NetlistPurpose,
     out: W,
+}
+
+/// Whether or not to verify timing constraints for transient simulations.
+pub enum VerifyTiming {
+    /// Do **not** verify timing constraints.
+    No,
+    /// Verify timing constraints in the given [`Pvt`] corner.
+    Yes(Pvt),
 }
 
 impl SubstrateData {
@@ -361,6 +369,29 @@ impl SubstrateCtx {
         let mut inner = self.write();
         inner.write_schematic(args)?;
         Ok(())
+    }
+
+    pub(crate) fn _write_schematic_for_purpose<T, W: Write>(
+        &self,
+        args: WriteSchematicArgs<T::Params, W>,
+    ) -> Result<PreprocessedNetlist>
+    where
+        T: Component,
+    {
+        let inst = self.instantiate_schematic::<T>(args.params)?;
+        let top = inst
+            .module()
+            .local_id()
+            .ok_or(ErrorSource::NetlistExternalModule)?;
+        let args = InnerWriteSchematicArgs {
+            top,
+            flatten_top: args.flatten_top,
+            purpose: args.purpose,
+            out: args.out,
+        };
+        let mut inner = self.write();
+        let netlist = inner.write_schematic(args)?;
+        Ok(netlist)
     }
 
     #[inline]
@@ -661,12 +692,15 @@ impl SubstrateCtx {
         T: Testbench,
     {
         let work_dir = work_dir.as_ref();
-        with_err_context(self._write_simulation::<T>(params, work_dir, None), || {
-            ErrorContext::Task(arcstr::format!(
-                "running simulation in working directory {:?}",
-                work_dir
-            ))
-        })
+        with_err_context(
+            self._write_simulation::<T>(params, work_dir, None, VerifyTiming::No),
+            || {
+                ErrorContext::Task(arcstr::format!(
+                    "running simulation in working directory {:?}",
+                    work_dir
+                ))
+            },
+        )
     }
 
     pub fn write_simulation_with_corner<T>(
@@ -680,7 +714,7 @@ impl SubstrateCtx {
     {
         let work_dir = work_dir.as_ref();
         with_err_context(
-            self._write_simulation::<T>(params, work_dir, Some(corner)),
+            self._write_simulation::<T>(params, work_dir, Some(corner), VerifyTiming::No),
             || {
                 ErrorContext::Task(arcstr::format!(
                     "running simulation in working directory {:?}",
@@ -695,6 +729,7 @@ impl SubstrateCtx {
         params: &T::Params,
         work_dir: impl AsRef<Path>,
         corner: Option<CornerEntry>,
+        verify_timing: VerifyTiming,
     ) -> Result<T::Output>
     where
         T: Testbench,
@@ -729,7 +764,7 @@ impl SubstrateCtx {
             },
         };
 
-        self.write_schematic_for_purpose::<T, _>(args)?;
+        let netlist: PreprocessedNetlist = self._write_schematic_for_purpose::<T, _>(args)?;
 
         f.flush()?;
         drop(f);
@@ -752,8 +787,21 @@ impl SubstrateCtx {
 
         tb.setup(&mut ctx)?;
         self.pdk().pre_sim(&mut ctx)?;
-
         let simulator = self.simulator().ok_or(ErrorSource::ToolNotSpecified)?;
+
+        if let VerifyTiming::Yes(pvt) = verify_timing {
+            let mut constraints = netlist.timing_constraint_db(&pvt);
+
+            for constraint in constraints.named_constraints(&netlist) {
+                let port = simulator.node_voltage_string(&constraint.port);
+                ctx.input.save.add(port);
+                if let Some(ref related_port) = constraint.related_port {
+                    let related_port = simulator.node_voltage_string(related_port);
+                    ctx.input.save.add(related_port);
+                }
+            }
+        }
+
         let output = simulator.simulate(ctx.into_inner())?;
 
         let mut ctx = PostSimCtx { output };
@@ -974,7 +1022,10 @@ impl SubstrateData {
         self.pex_tool.clone()
     }
 
-    pub(crate) fn write_schematic<W>(&mut self, args: InnerWriteSchematicArgs<W>) -> Result<()>
+    pub(crate) fn write_schematic<W>(
+        &mut self,
+        args: InnerWriteSchematicArgs<W>,
+    ) -> Result<PreprocessedNetlist>
     where
         W: Write,
     {
@@ -984,7 +1035,10 @@ impl SubstrateData {
         })
     }
 
-    fn _write_schematic<W>(&mut self, args: InnerWriteSchematicArgs<W>) -> Result<()>
+    fn _write_schematic<W>(
+        &mut self,
+        args: InnerWriteSchematicArgs<W>,
+    ) -> Result<PreprocessedNetlist>
     where
         W: Write,
     {
@@ -1075,7 +1129,7 @@ impl SubstrateData {
 
         netlister.emit_end(&mut out)?;
         out.flush()?;
-        Ok(())
+        Ok(netlist)
     }
 
     fn get_external_module<Q>(&self, name: &Q) -> Result<Arc<ExternalModule>>

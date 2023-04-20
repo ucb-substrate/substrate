@@ -283,13 +283,16 @@ impl Simulator for Spectre {
         &self,
         path: &substrate::schematic::signal::NamedSignalPathBuf,
     ) -> String {
+        use std::fmt::Write;
+
         let mut s = String::new();
         for inst in path.insts.iter() {
             s.push_str(&inst);
+            s.push('.');
         }
         s.push_str(&path.signal);
         if let Some(idx) = path.idx {
-            s.push_str(&format!("[{idx}]"));
+            write!(&mut s, "[{idx}]").expect("failed to write node voltage string");
         }
         s
     }

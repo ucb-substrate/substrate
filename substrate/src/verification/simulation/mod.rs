@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use derive_builder::Builder;
@@ -74,7 +74,7 @@ pub enum Save {
     #[default]
     All,
     None,
-    Signals(Vec<String>),
+    Signals(HashSet<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
@@ -418,5 +418,21 @@ impl TranData {
 
     pub fn time_waveform(&self) -> SharedWaveform<'_> {
         SharedWaveform::from_signal(&self.time, &self.time)
+    }
+}
+
+impl Save {
+    pub fn add(&mut self, value: impl Into<String>) {
+        match self {
+            Self::All => (),
+            Self::None => {
+                let mut set = HashSet::new();
+                set.insert(value.into());
+                *self = Self::Signals(set)
+            }
+            Self::Signals(set) => {
+                set.insert(value.into());
+            }
+        }
     }
 }

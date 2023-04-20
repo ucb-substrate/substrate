@@ -130,8 +130,8 @@ type IdTopConstraint<'a> = TopConstraint<'a, SignalPathBuf>;
 type NamedTopConstraint<'a> = TopConstraint<'a, NamedSignalPathBuf>;
 
 pub(crate) struct TopConstraintDb<'a> {
-    constraints: Vec<IdTopConstraint<'a>>,
-    named_constraints: Option<Vec<NamedTopConstraint<'a>>>,
+    pub(crate) constraints: Vec<IdTopConstraint<'a>>,
+    pub(crate) named_constraints: Option<Vec<NamedTopConstraint<'a>>>,
 }
 
 #[derive(Default, Clone, Debug)]
@@ -167,12 +167,16 @@ impl SetupHoldConstraint {
 
 impl PreprocessedNetlist {
     /// Returns a list of the nodes that need to be captured by the simulator.
-    fn timing_nodes(&self, pvt: &Pvt) -> Vec<IdTopConstraint<'_>> {
+    pub(crate) fn timing_constraint_db(&self, pvt: &Pvt) -> TopConstraintDb {
         let module = &self.modules[self.top];
         let mut stack = Vec::new();
         let mut out = Vec::new();
         self.timing_helper(self.top, pvt, &mut stack, &mut out);
-        out
+
+        TopConstraintDb {
+            constraints: out,
+            named_constraints: None,
+        }
     }
 
     fn timing_helper<'a, 'b, 'c>(
@@ -191,7 +195,7 @@ impl PreprocessedNetlist {
             let constraint = match constraint {
                 TimingConstraint::SetupHold(c) => TopConstraint {
                     constraint,
-                    port: SignalPathBuf::new(stack.clone(), c.port),
+                    port: self.simplify_path(SignalPathBuf::new(stack.clone(), c.port)),
                     related_port: None,
                 },
                 _ => todo!(),
@@ -234,7 +238,10 @@ impl PreprocessedNetlist {
 }
 
 impl<'a> TopConstraintDb<'a> {
-    fn compute_names<'b>(&'a mut self, netlist: &'b PreprocessedNetlist) {
+    fn compute_names<'b>(&mut self, netlist: &'b PreprocessedNetlist) {
+        if self.named_constraints.is_some() {
+            return;
+        }
         let named_constraints = self
             .constraints
             .iter()
@@ -245,5 +252,13 @@ impl<'a> TopConstraintDb<'a> {
             })
             .collect();
         self.named_constraints = Some(named_constraints);
+    }
+
+    pub(crate) fn named_constraints<'b>(
+        &mut self,
+        netlist: &'b PreprocessedNetlist,
+    ) -> impl Iterator<Item = &NamedTopConstraint> {
+        self.compute_names(netlist);
+        self.named_constraints.as_ref().unwrap().iter()
     }
 }

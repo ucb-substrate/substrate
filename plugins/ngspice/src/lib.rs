@@ -64,6 +64,7 @@ impl Simulator for Ngspice {
         s.push_str("v(");
         for inst in path.insts.iter() {
             s.push_str(&inst);
+            s.push('.');
         }
         s.push_str(&path.signal);
         if let Some(idx) = path.idx {
