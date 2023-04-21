@@ -1,11 +1,12 @@
-use std::collections::{HashMap, HashSet};
-use std::ops::Deref;
+use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::ops::{Deref, DerefMut};
 
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, SlotMap};
 
 use super::simulation::waveform::{EdgeDir, SharedWaveform, TimeWaveform};
+use super::simulation::{Simulator, TranData};
 use crate::pdk::corner::Pvt;
 use crate::schematic::circuit::{InstanceKey, Reference};
 use crate::schematic::context::ModuleKey;
@@ -172,10 +173,125 @@ pub struct TimingView {
     pub(crate) constraints: Vec<TimingConstraint>,
 }
 
+#[derive(Clone, Debug)]
+pub struct TimingCheck {
+    slack: f64,
+    time: f64,
+    port: NamedSignalPathBuf,
+    related_port: NamedSignalPathBuf,
+}
+
+#[derive(Debug, Clone)]
+struct MinSlack(TimingCheck);
+
+impl Deref for MinSlack {
+    type Target = TimingCheck;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for MinSlack {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl PartialEq for MinSlack {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.slack.eq(&other.0.slack)
+    }
+}
+
+impl Eq for MinSlack {}
+
+impl Ord for MinSlack {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.0.slack.total_cmp(&self.0.slack)
+    }
+}
+
+impl PartialOrd for MinSlack {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TimingReport {
+    pub(crate) setup_checks: Vec<TimingCheck>,
+    pub(crate) hold_checks: Vec<TimingCheck>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct TimingReportBuilder {
+    setup_checks: BinaryHeap<MinSlack>,
+    hold_checks: BinaryHeap<MinSlack>,
+    capacity: usize,
+}
+
 impl TimingView {
     #[inline]
     pub fn new() -> Self {
         Self::default()
+    }
+}
+
+impl TimingReport {
+    #[inline]
+    pub fn builder() -> TimingReportBuilder {
+        TimingReportBuilder::default()
+    }
+}
+
+impl Default for TimingReportBuilder {
+    fn default() -> Self {
+        Self::with_capacity(4)
+    }
+}
+
+impl TimingReportBuilder {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            capacity,
+            setup_checks: BinaryHeap::with_capacity(capacity),
+            hold_checks: BinaryHeap::with_capacity(capacity),
+        }
+    }
+
+    pub fn build(self) -> TimingReport {
+        TimingReport {
+            setup_checks: self.setup_checks.into_iter().map(|m| m.0).collect(),
+            hold_checks: self.hold_checks.into_iter().map(|m| m.0).collect(),
+        }
+    }
+}
+
+impl TimingReportBuilder {
+    pub fn add_setup_check(&mut self, slack: f64, check: impl FnOnce() -> TimingCheck) {
+        debug_assert!(self.capacity > 0);
+        if self.setup_checks.len() < self.capacity {
+            self.setup_checks.push(MinSlack(check()));
+        } else {
+            let max_slack = self.setup_checks.peek().unwrap().0.slack;
+            if slack < max_slack {
+                self.setup_checks.pop();
+                self.setup_checks.push(MinSlack(check()));
+            }
+        }
+    }
+
+    pub fn add_hold_check(&mut self, slack: f64, check: impl FnOnce() -> TimingCheck) {
+        debug_assert!(self.capacity > 0);
+        if self.hold_checks.len() < self.capacity {
+            self.hold_checks.push(MinSlack(check()));
+        } else {
+            let max_slack = self.hold_checks.peek().unwrap().0.slack;
+            if slack < max_slack {
+                self.setup_checks.pop();
+                self.hold_checks.push(MinSlack(check()));
+            }
+        }
     }
 }
 
@@ -300,6 +416,9 @@ pub(crate) fn verify_setup_hold_constraint(
     constraint: &SetupHoldConstraint,
     port: SharedWaveform,
     related_port: SharedWaveform,
+    port_name: &NamedSignalPathBuf,
+    related_port_name: &NamedSignalPathBuf,
+    report: &mut TimingReportBuilder,
 ) {
     // if setup, check for data edges starting before `t`, then check that
     // edge's end time.
@@ -327,8 +446,14 @@ pub(crate) fn verify_setup_hold_constraint(
                     } else {
                         constraint.fall.get(idx1, idx2)
                     };
-                    // TODO return an Error instead of panicking
-                    assert!(t - tr.end_time() > tsu);
+
+                    let slack = t - tr.end_time() - tsu;
+                    report.add_setup_check(slack, || TimingCheck {
+                        slack,
+                        time: t,
+                        port: port_name.clone(),
+                        related_port: related_port_name.clone(),
+                    });
                 }
             }
             ConstraintKind::Hold => {
@@ -346,10 +471,46 @@ pub(crate) fn verify_setup_hold_constraint(
                     } else {
                         constraint.fall.get(idx1, idx2)
                     };
-                    // TODO return an Error instead of panicking
-                    assert!(tr.start_time() - t > t_hold);
+                    let slack = tr.start_time() - t - t_hold;
+                    report.add_hold_check(slack, || TimingCheck {
+                        slack,
+                        time: t,
+                        port: port_name.clone(),
+                        related_port: related_port_name.clone(),
+                    });
                 }
             }
         }
     }
+}
+
+pub(crate) fn generate_timing_report<'a>(
+    constraints: impl Iterator<Item = &'a NamedTopConstraint<'a>>,
+    data: &'a TranData,
+    simulator: &'a dyn Simulator,
+) -> TimingReport {
+    let mut report = TimingReport::builder();
+    for constraint in constraints {
+        match constraint.constraint {
+            TimingConstraint::SetupHold(c) => {
+                let related_port_name = constraint.related_port.as_ref().unwrap();
+                let port = data
+                    .waveform(&simulator.node_voltage_string(&constraint.port))
+                    .unwrap();
+                let related_port = data
+                    .waveform(&simulator.node_voltage_string(&related_port_name))
+                    .unwrap();
+                verify_setup_hold_constraint(
+                    c,
+                    port,
+                    related_port,
+                    &constraint.port,
+                    related_port_name,
+                    &mut report,
+                );
+            }
+            _ => todo!(),
+        };
+    }
+    report.build()
 }
