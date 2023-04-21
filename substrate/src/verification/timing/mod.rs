@@ -5,6 +5,8 @@ use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, SlotMap};
 
+use sublut::{FloatLut1, FloatLut2};
+
 use super::simulation::waveform::{EdgeDir, SharedWaveform, TimeWaveform};
 use super::simulation::{Simulator, TranData};
 use crate::pdk::corner::Pvt;
@@ -27,63 +29,6 @@ pub enum ConstraintKind {
     Hold,
 }
 
-#[derive(Debug, Default, Clone, Eq, PartialEq, Builder, Serialize, Deserialize)]
-#[builder(pattern = "owned")]
-pub struct Lut1<K1, V> {
-    k1: Vec<K1>,
-    values: Vec<V>,
-}
-
-#[derive(Debug, Default, Clone, Eq, PartialEq, Builder, Serialize, Deserialize)]
-#[builder(pattern = "owned")]
-pub struct Lut2<K1, K2, V> {
-    k1: Vec<K1>,
-    k2: Vec<K2>,
-    // row major order
-    values: Vec<Vec<V>>,
-}
-
-impl<K1, K2, V> Lut2<K1, K2, V> {
-    pub fn builder() -> Lut2Builder<K1, K2, V> {
-        Default::default()
-    }
-}
-
-impl<K1, K2, V> Lut2<K1, K2, V>
-where
-    K1: Ord,
-    K2: Ord,
-{
-    pub fn get(&self, k1: &K1, k2: &K2) -> Option<&V> {
-        let i1 = match self.k1.binary_search(k1) {
-            Ok(x) => x,
-            Err(x) => x,
-        };
-        let i2 = match self.k2.binary_search(k2) {
-            Ok(x) => x,
-            Err(x) => x,
-        };
-        Some(self.values.get(i1)?.get(i2)?)
-    }
-}
-
-impl FloatLut2 {
-    pub fn getf(&self, k1: &f64, k2: &f64) -> Option<&f64> {
-        let i1 = match self.k1.binary_search(k1) {
-            Ok(x) => x,
-            Err(x) => x,
-        };
-        let i2 = match self.k2.binary_search(k2) {
-            Ok(x) => x,
-            Err(x) => x,
-        };
-        Some(self.values.get(i1)?.get(i2)?)
-    }
-}
-
-type FloatLut1 = Lut1<f64, f64>;
-type FloatLut2 = Lut2<f64, f64, f64>;
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TimingTable(FloatLut2);
 
@@ -94,7 +39,7 @@ impl From<FloatLut2> for TimingTable {
 }
 
 impl Deref for TimingTable {
-    type Target = Lut2<f64, f64, f64>;
+    type Target = FloatLut2;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -134,7 +79,7 @@ pub struct PortState {
 pub struct MinPulseWidthConstraint {
     pvt: Pvt,
     port: Port,
-    min_pulse_width: Lut1<f64, f64>,
+    min_pulse_width: FloatLut1,
 }
 
 #[derive(Clone, Debug)]
@@ -441,10 +386,11 @@ pub(crate) fn verify_setup_hold_constraint(
                     // convert to nanoseconds
                     let idx1 = tr.duration() * 1e9;
                     let idx2 = clk_edge.duration() * 1e9;
+                    // TODO handle extrapolation and add warning
                     let tsu = if tr.dir().is_rising() {
-                        constraint.rise.get(idx1, idx2)
+                        constraint.rise.getf(idx1, idx2).unwrap()
                     } else {
-                        constraint.fall.get(idx1, idx2)
+                        constraint.fall.getf(idx1, idx2).unwrap()
                     };
 
                     let slack = t - tr.end_time() - tsu;
@@ -466,10 +412,11 @@ pub(crate) fn verify_setup_hold_constraint(
                     // convert to nanoseconds
                     let idx1 = tr.duration() * 1e9;
                     let idx2 = clk_edge.duration() * 1e9;
+                    // TODO handle extrapolation and add warning
                     let t_hold = if tr.dir().is_rising() {
-                        constraint.rise.get(idx1, idx2)
+                        constraint.rise.getf(idx1, idx2).unwrap()
                     } else {
-                        constraint.fall.get(idx1, idx2)
+                        constraint.fall.getf(idx1, idx2).unwrap()
                     };
                     let slack = tr.start_time() - t - t_hold;
                     report.add_hold_check(slack, || TimingCheck {

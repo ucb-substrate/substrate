@@ -17,6 +17,7 @@ flexbuffers = "2"
 gds21 = { path = "../libs/gds21" }
 subspice = { path = "../plugins/subspice" }
 subgeom = { path = "../libs/subgeom" }
+sublut = { path = "../libs/sublut" }
 codegen = { path = "../codegen" }
 log = "0.4"
 array_map = { version = "0.4", features = ["derive", "serde", "std"] }

@@ -1,10 +1,11 @@
 use common::{out_path, setup_ctx};
+use sublut::FloatLut2;
 use substrate::component::{Component, NoParams};
 use substrate::pdk::corner::Pvt;
 use substrate::pdk::stdcell::StdCell;
 use substrate::schematic::circuit::Direction;
 use substrate::verification::simulation::waveform::EdgeDir;
-use substrate::verification::timing::{ConstraintKind, Lut2, SetupHoldConstraint};
+use substrate::verification::timing::{ConstraintKind, SetupHoldConstraint};
 
 mod common;
 
@@ -58,7 +59,7 @@ impl Component for Register {
     ) -> substrate::error::Result<()> {
         let d = ctx.port("d");
         let clk = ctx.port("clk");
-        let rise = Lut2::builder()
+        let rise = FloatLut2::builder()
             .k1(vec![0.01, 0.5, 1.5])
             .k2(vec![0.01, 0.5, 1.5])
             .values(vec![
@@ -68,7 +69,7 @@ impl Component for Register {
             ])
             .build()
             .unwrap();
-        let fall = Lut2::builder()
+        let fall = FloatLut2::builder()
             .k1(vec![0.01, 0.5, 1.5])
             .k2(vec![0.01, 0.5, 1.5])
             .values(vec![
