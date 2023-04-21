@@ -12,6 +12,7 @@ use serde::Serialize;
 use substrate::verification::simulation::{
     AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, OutputFormat, Quantity,
     RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts, SweepMode, TranData,
+    Variations,
 };
 use templates::{render_netlist, NetlistCtx};
 use tera::{Context, Tera};
@@ -177,7 +178,7 @@ pub fn run_spectre(input: &SimInput) -> Result<Vec<AnalysisData>> {
     let paths = generate_paths(work_dir);
 
     std::fs::create_dir_all(&input.work_dir)?;
-    let analyses = get_analyses(&input.analyses);
+    let analyses = get_analyses(&input.analyses)?;
 
     let mut spectre_directives = vec!["oppreserveall options preserve_inst=all".to_string()];
     save_directives(input, &mut spectre_directives);
@@ -280,17 +281,18 @@ impl Simulator for Spectre {
     }
 }
 
-fn get_analyses(input: &[Analysis]) -> Vec<String> {
+fn get_analyses(input: &[Analysis]) -> Result<Vec<String>> {
     input
         .iter()
         .enumerate()
-        .map(|(i, analysis)| analysis_line(analysis, i))
+        .map(|(i, analysis)| analysis_line(analysis, "analysis", i))
         .collect()
 }
 
-fn analysis_line(input: &Analysis, num: usize) -> String {
-    match input {
-        Analysis::Op(_) => format!("analysis{num} dc"),
+fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
+    let name = format!("{prefix}_{num}");
+    Ok(match input {
+        Analysis::Op(_) => format!("{name} dc"),
         Analysis::Tran(a) => {
             let strobe = if let Some(strobe) = a.strobe_period {
                 format!(" strobeperiod={strobe}")
@@ -298,21 +300,77 @@ fn analysis_line(input: &Analysis, num: usize) -> String {
                 String::new()
             };
             format!(
-                "analysis{num} tran step={} stop={} start={}{}",
+                "{name} tran step={} stop={} start={}{}",
                 a.step, a.stop, a.start, strobe
             )
         }
         Analysis::Ac(a) => format!(
-            "analysis{num} ac start={} stop={} {}",
+            "{name} ac start={} stop={} {}",
             a.fstart,
             a.fstop,
             fmt_sweep_mode(a.sweep, a.points),
         ),
         Analysis::Dc(a) => format!(
-            "analysis{num} dc {} start={} stop={} step={}",
+            "{name} dc {} start={} stop={} step={}",
             a.sweep, a.start, a.stop, a.step
         ),
-    }
+        Analysis::MonteCarlo(a) => {
+            let mut monte_carlo = format!("{name} montecarlo");
+            monte_carlo.push_str(&format!(
+                " variations={}",
+                match a.variations {
+                    Variations::Process => {
+                        "process"
+                    }
+                    Variations::Mismatch => {
+                        "mismatch"
+                    }
+                    Variations::All => {
+                        "all"
+                    }
+                }
+            ));
+            if let Some(num_iterations) = a.num_iterations {
+                monte_carlo.push_str(&format!(" numruns={}", num_iterations));
+            }
+            if let Some(seed) = a.seed {
+                monte_carlo.push_str(&format!(" seed={}", seed));
+            }
+            if let Some(first_run) = a.first_run {
+                monte_carlo.push_str(&format!(" firstrun={}", first_run));
+            }
+
+            monte_carlo.push_str(" {\n\t");
+
+            let analysis_lines = a
+                .analyses
+                .iter()
+                .enumerate()
+                .map(|(i, analysis)| {
+                    if let Analysis::MonteCarlo(_) = analysis {
+                        bail!("spectre plugin does not support nested Monte Carlo simulations");
+                    } else {
+                        analysis_line(analysis, &name, i)
+                    }
+                })
+                .collect::<Result<Vec<String>>>()?;
+
+            monte_carlo.push_str(&analysis_lines.join("\n\t"));
+
+            // TODO: Support current nodes
+            let export_lines = a
+                .exports
+                .iter()
+                .map(|export| format!("export {export}=oceanEval(\"v(\\\"{export}\\\")\")"))
+                .collect::<Vec<String>>();
+
+            monte_carlo.push_str(&export_lines.join("\n\t"));
+
+            monte_carlo.push_str("\n}");
+
+            monte_carlo
+        }
+    })
 }
 
 fn fmt_sweep_mode(mode: SweepMode, points: usize) -> String {

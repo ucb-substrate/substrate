@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
+use anyhow::{bail, Result};
 use spice_rawfile::Rawfile;
 use substrate::error::ErrorSource;
-pub(crate) use substrate::error::Result;
 use substrate::verification::simulation::{
     AcAnalysis, AcData, Analysis, AnalysisData, AnalysisType, DcAnalysis, DcData, OpAnalysis,
     OpData, Quantity, RealSignal, ScalarSignal, SimInput, SimOutput, Simulator, SimulatorOpts,
@@ -19,16 +19,16 @@ mod tests;
 pub struct Ngspice {}
 
 impl Simulator for Ngspice {
-    fn new(_opts: SimulatorOpts) -> Result<Self>
+    fn new(_opts: SimulatorOpts) -> substrate::error::Result<Self>
     where
         Self: Sized,
     {
         Ok(Self {})
     }
 
-    fn simulate(&self, input: SimInput) -> Result<SimOutput> {
+    fn simulate(&self, input: SimInput) -> substrate::error::Result<SimOutput> {
         std::fs::create_dir_all(&input.work_dir)?;
-        let analyses = get_analyses(&input.analyses);
+        let analyses = get_analyses(&input.analyses)?;
         let directives = get_directives(&input);
         let ctx = NetlistCtx {
             libs: &input.libs,
@@ -57,7 +57,7 @@ impl Simulator for Ngspice {
     }
 }
 
-fn get_analyses(input: &[Analysis]) -> Vec<String> {
+fn get_analyses(input: &[Analysis]) -> Result<Vec<String>> {
     input.iter().map(analysis_line).collect()
 }
 
@@ -72,8 +72,8 @@ fn get_directives(input: &SimInput) -> Vec<String> {
     directives
 }
 
-fn analysis_line(input: &Analysis) -> String {
-    match input {
+fn analysis_line(input: &Analysis) -> Result<String> {
+    Ok(match input {
         Analysis::Op(_) => String::from(".op"),
         Analysis::Tran(a) => format!(".tran {} {} {}", a.step, a.stop, a.start),
         Analysis::Ac(a) => format!(
@@ -84,7 +84,10 @@ fn analysis_line(input: &Analysis) -> String {
             a.fstop
         ),
         Analysis::Dc(a) => format!(".dc {} {} {} {}", a.sweep, a.start, a.stop, a.step),
-    }
+        Analysis::MonteCarlo(_) => {
+            bail!("ngspice plugin does not support Monte Carlo analyses");
+        }
+    })
 }
 
 fn fmt_sweep_mode(mode: SweepMode) -> &'static str {
@@ -100,12 +103,12 @@ fn read_rawfile(input: &SimInput, path: impl AsRef<Path>) -> Result<SimOutput> {
     let raw = spice_rawfile::parse(&data)
         .map_err(|e| ErrorSource::Internal(format!("failed to parse simulation output: {e}")))?;
 
-    let out = arrange_rawfile(input, raw);
+    let out = arrange_rawfile(input, raw)?;
 
     Ok(SimOutput { data: out })
 }
 
-fn arrange_rawfile(input: &SimInput, raw: Rawfile) -> Vec<AnalysisData> {
+fn arrange_rawfile(input: &SimInput, raw: Rawfile) -> Result<Vec<AnalysisData>> {
     let mut out = vec![AnalysisData::Other; input.analyses.len()];
     for an in raw.analyses {
         let t = atype(&an);
@@ -115,9 +118,9 @@ fn arrange_rawfile(input: &SimInput, raw: Rawfile) -> Vec<AnalysisData> {
             .enumerate()
             .find(|(_, a)| a.analysis_type() == t)
             .unwrap();
-        out[idx] = parse_analysis(ian, an);
+        out[idx] = parse_analysis(ian, an)?;
     }
-    out
+    Ok(out)
 }
 
 fn atype(raw: &spice_rawfile::parser::Analysis) -> AnalysisType {
@@ -137,13 +140,14 @@ fn atype(raw: &spice_rawfile::parser::Analysis) -> AnalysisType {
 
 use spice_rawfile::parser::Analysis as RawAnalysis;
 
-fn parse_analysis(input: &Analysis, output: RawAnalysis) -> AnalysisData {
-    match input {
+fn parse_analysis(input: &Analysis, output: RawAnalysis) -> Result<AnalysisData> {
+    Ok(match input {
         Analysis::Ac(ac) => AnalysisData::Ac(parse_ac(ac, output)),
         Analysis::Tran(tran) => AnalysisData::Tran(parse_tran(tran, output)),
         Analysis::Op(op) => AnalysisData::Op(parse_op(op, output)),
         Analysis::Dc(dc) => AnalysisData::Dc(parse_dc(dc, output)),
-    }
+        Analysis::MonteCarlo(_) => bail!("ngspice plugin does not support Monte Carlo analyses"),
+    })
 }
 
 use substrate::verification::simulation::ComplexSignal;
