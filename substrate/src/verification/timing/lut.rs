@@ -101,6 +101,7 @@ mod tests {
 
         assert!(float_eq!(lut.getf(5., 2.).unwrap(), 5., r2nd <= 1e-8));
         assert!(float_eq!(lut.getf(5., 2.5).unwrap(), 7., r2nd <= 1e-8));
+        assert!(float_eq!(lut.getf(6.5, 1.5).unwrap(), 3.75, r2nd <= 1e-8));
         assert_eq!(lut.getf(4.5, 2.5), None);
     }
 }

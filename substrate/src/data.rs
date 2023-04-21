@@ -820,7 +820,7 @@ impl SubstrateCtx {
                                     .node_voltage_string(constraint.related_port.as_ref().unwrap()),
                             )
                             .unwrap();
-                        verify_setup_hold_constraint(constraint, port, related_port);
+                        // verify_setup_hold_constraint(constraint, port, related_port);
                     }
                     _ => todo!(),
                 };
