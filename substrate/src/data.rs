@@ -809,7 +809,8 @@ impl SubstrateCtx {
             let output = simulator.simulate(ctx.into_inner())?;
 
             let data = output.data[0].tran();
-            generate_timing_report(constraints.named_constraints(&netlist), data, &*simulator);
+            let report =
+                generate_timing_report(constraints.named_constraints(&netlist), data, &*simulator);
             output
         } else {
             simulator.simulate(ctx.into_inner())?
