@@ -39,6 +39,7 @@ impl From<std::cmp::Ordering> for SearchRange {
     }
 }
 
+#[inline]
 pub fn search<T, P>(lst: &[T], predicate: P, side: SearchSide) -> Option<(usize, &T)>
 where
     P: FnMut(&T) -> SearchRange,
@@ -63,7 +64,6 @@ where
         let mid = (lo + hi) / 2;
         let val = &lst[mid];
         let pred = predicate(val);
-        println!("lo = {lo}, hi = {hi}, mid = {mid}, pred = {pred:?}");
         match pred {
             SearchRange::Up => {
                 lo = mid + 1;

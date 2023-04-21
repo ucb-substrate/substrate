@@ -111,6 +111,23 @@ impl CornerEntry {
     }
 }
 
+impl Pvt {
+    #[inline]
+    pub fn corner(&self) -> &CornerEntry {
+        &self.corner
+    }
+
+    #[inline]
+    pub fn voltage(&self) -> f64 {
+        self.voltage
+    }
+
+    #[inline]
+    pub fn temp(&self) -> f64 {
+        self.temp
+    }
+}
+
 impl Default for CornerDb {
     #[inline]
     fn default() -> Self {

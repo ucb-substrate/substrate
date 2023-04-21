@@ -36,13 +36,16 @@ use crate::schematic::validation::drivers::validate_drivers;
 use crate::schematic::validation::naming::validate_naming;
 use crate::script::map::ScriptMap;
 use crate::script::Script;
+use crate::search::{search, SearchSide};
 use crate::verification::drc::{DrcInput, DrcOutput, DrcTool};
 use crate::verification::lvs::{LvsInput, LvsOutput, LvsTool};
 use crate::verification::pex::{PexInput, PexOutput, PexTool};
 use crate::verification::simulation::context::{PostSimCtx, PreSimCtx};
 use crate::verification::simulation::testbench::Testbench;
+use crate::verification::simulation::waveform::TimeWaveform;
 use crate::verification::simulation::{Save, SimInput, SimOpts, Simulator};
 use crate::verification::timing::context::TimingCtx;
+use crate::verification::timing::{verify_setup_hold_constraint, ConstraintKind, TimingConstraint};
 
 pub(crate) struct SubstrateData {
     schematics: SchematicData,
@@ -789,8 +792,8 @@ impl SubstrateCtx {
         self.pdk().pre_sim(&mut ctx)?;
         let simulator = self.simulator().ok_or(ErrorSource::ToolNotSpecified)?;
 
-        if let VerifyTiming::Yes(pvt) = verify_timing {
-            let mut constraints = netlist.timing_constraint_db(&pvt);
+        let output = if let VerifyTiming::Yes(ref pvt) = verify_timing {
+            let mut constraints = netlist.timing_constraint_db(pvt);
 
             for constraint in constraints.named_constraints(&netlist) {
                 let port = simulator.node_voltage_string(&constraint.port);
@@ -800,9 +803,32 @@ impl SubstrateCtx {
                     ctx.input.save.add(related_port);
                 }
             }
-        }
 
-        let output = simulator.simulate(ctx.into_inner())?;
+            let output = simulator.simulate(ctx.into_inner())?;
+
+            let data = output.data[0].tran();
+
+            for constraint in constraints.named_constraints(&netlist) {
+                match constraint.constraint {
+                    TimingConstraint::SetupHold(c) => {
+                        let port = data
+                            .waveform(&simulator.node_voltage_string(&constraint.port))
+                            .unwrap();
+                        let related_port = data
+                            .waveform(
+                                &simulator
+                                    .node_voltage_string(constraint.related_port.as_ref().unwrap()),
+                            )
+                            .unwrap();
+                        verify_setup_hold_constraint(constraint, port, related_port);
+                    }
+                    _ => todo!(),
+                };
+            }
+            output
+        } else {
+            simulator.simulate(ctx.into_inner())?
+        };
 
         let mut ctx = PostSimCtx { output };
         tb.post_sim(&mut ctx)?;

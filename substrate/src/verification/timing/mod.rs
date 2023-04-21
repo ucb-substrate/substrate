@@ -5,12 +5,13 @@ use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, SlotMap};
 
-use super::simulation::waveform::EdgeDir;
+use super::simulation::waveform::{EdgeDir, SharedWaveform, TimeWaveform};
 use crate::pdk::corner::Pvt;
 use crate::schematic::circuit::{InstanceKey, Reference};
 use crate::schematic::context::ModuleKey;
 use crate::schematic::netlist::preprocess::PreprocessedNetlist;
 use crate::schematic::signal::{NamedSignalPathBuf, SignalInfo, SignalPathBuf, Slice, SliceOne};
+use crate::search::{search, SearchSide};
 
 pub mod context;
 
@@ -47,6 +48,38 @@ impl<K1, K2, V> Lut2<K1, K2, V> {
     }
 }
 
+impl<K1, K2, V> Lut2<K1, K2, V>
+where
+    K1: Ord,
+    K2: Ord,
+{
+    pub fn get(&self, k1: &K1, k2: &K2) -> Option<&V> {
+        let i1 = match self.k1.binary_search(k1) {
+            Ok(x) => x,
+            Err(x) => x,
+        };
+        let i2 = match self.k2.binary_search(k2) {
+            Ok(x) => x,
+            Err(x) => x,
+        };
+        Some(self.values.get(i1)?.get(i2)?)
+    }
+}
+
+impl FloatLut2 {
+    pub fn getf(&self, k1: &f64, k2: &f64) -> Option<&f64> {
+        let i1 = match self.k1.binary_search(k1) {
+            Ok(x) => x,
+            Err(x) => x,
+        };
+        let i2 = match self.k2.binary_search(k2) {
+            Ok(x) => x,
+            Err(x) => x,
+        };
+        Some(self.values.get(i1)?.get(i2)?)
+    }
+}
+
 type FloatLut1 = Lut1<f64, f64>;
 type FloatLut2 = Lut2<f64, f64, f64>;
 
@@ -68,19 +101,19 @@ impl Deref for TimingTable {
 
 #[derive(Clone, Debug, Builder)]
 pub struct SetupHoldConstraint {
-    pvt: Pvt,
-    port: SliceOne,
-    related_port: SliceOne,
-    related_port_transition: EdgeDir,
+    pub(crate) pvt: Pvt,
+    pub(crate) port: SliceOne,
+    pub(crate) related_port: SliceOne,
+    pub(crate) related_port_transition: EdgeDir,
     // TODO: decide how to specify conditions.
     // cond: Arc<dyn Fn(TimingInstance) -> bool>,
-    kind: ConstraintKind,
+    pub(crate) kind: ConstraintKind,
     /// Timing for the falling edge of `port`
     #[builder(setter(into))]
-    fall: TimingTable,
+    pub(crate) fall: TimingTable,
     /// Timing for the rising edge of `port`
     #[builder(setter(into))]
-    rise: TimingTable,
+    pub(crate) rise: TimingTable,
 }
 
 #[derive(Eq, PartialEq, Hash, Debug, Copy, Clone, Serialize, Deserialize)]
@@ -260,5 +293,63 @@ impl<'a> TopConstraintDb<'a> {
     ) -> impl Iterator<Item = &NamedTopConstraint> {
         self.compute_names(netlist);
         self.named_constraints.as_ref().unwrap().iter()
+    }
+}
+
+pub(crate) fn verify_setup_hold_constraint(
+    constraint: &SetupHoldConstraint,
+    port: SharedWaveform,
+    related_port: SharedWaveform,
+) {
+    // if setup, check for data edges starting before `t`, then check that
+    // edge's end time.
+    // if hold, check for data edges ending after `t`, then check that
+    // edge's start time.
+    let vdd = constraint.pvt.voltage();
+    let transitions = port.transitions(0.2 * vdd, 0.8 * vdd).collect::<Vec<_>>();
+    for clk_edge in related_port
+        .transitions(0.2 * vdd, 0.8 * vdd)
+        .filter(|e| e.dir == constraint.related_port_transition)
+    {
+        let t = clk_edge.center_time();
+        match constraint.kind {
+            ConstraintKind::Setup => {
+                if let Some((idx, tr)) = search(
+                    &transitions,
+                    |tr| tr.start_time().total_cmp(&t).into(),
+                    SearchSide::Before,
+                ) {
+                    // convert to nanoseconds
+                    let idx1 = tr.duration() * 1e9;
+                    let idx2 = clk_edge.duration() * 1e9;
+                    let tsu = if tr.dir().is_rising() {
+                        constraint.rise.get(idx1, idx2)
+                    } else {
+                        constraint.fall.get(idx1, idx2)
+                    };
+                    // TODO return an Error instead of panicking
+                    assert!(t - tr.end_time() > tsu);
+                }
+            }
+            ConstraintKind::Hold => {
+                if let Some((idx, tr)) = search(
+                    &transitions,
+                    |tr| tr.end_time().total_cmp(&t).into(),
+                    SearchSide::After,
+                ) {
+                    // check edge.t() - t > t_hold
+                    // convert to nanoseconds
+                    let idx1 = tr.duration() * 1e9;
+                    let idx2 = clk_edge.duration() * 1e9;
+                    let t_hold = if tr.dir().is_rising() {
+                        constraint.rise.get(idx1, idx2)
+                    } else {
+                        constraint.fall.get(idx1, idx2)
+                    };
+                    // TODO return an Error instead of panicking
+                    assert!(tr.start_time() - t > t_hold);
+                }
+            }
+        }
     }
 }
