@@ -45,7 +45,9 @@ use crate::verification::simulation::testbench::Testbench;
 use crate::verification::simulation::waveform::TimeWaveform;
 use crate::verification::simulation::{Save, SimInput, SimOpts, Simulator};
 use crate::verification::timing::context::TimingCtx;
-use crate::verification::timing::{verify_setup_hold_constraint, ConstraintKind, TimingConstraint};
+use crate::verification::timing::{
+    generate_timing_report, verify_setup_hold_constraint, ConstraintKind, TimingConstraint,
+};
 
 pub(crate) struct SubstrateData {
     schematics: SchematicData,
@@ -807,24 +809,7 @@ impl SubstrateCtx {
             let output = simulator.simulate(ctx.into_inner())?;
 
             let data = output.data[0].tran();
-
-            for constraint in constraints.named_constraints(&netlist) {
-                match constraint.constraint {
-                    TimingConstraint::SetupHold(c) => {
-                        let port = data
-                            .waveform(&simulator.node_voltage_string(&constraint.port))
-                            .unwrap();
-                        let related_port = data
-                            .waveform(
-                                &simulator
-                                    .node_voltage_string(constraint.related_port.as_ref().unwrap()),
-                            )
-                            .unwrap();
-                        // verify_setup_hold_constraint(constraint, port, related_port);
-                    }
-                    _ => todo!(),
-                };
-            }
+            generate_timing_report(constraints.named_constraints(&netlist), data, &*simulator);
             output
         } else {
             simulator.simulate(ctx.into_inner())?
