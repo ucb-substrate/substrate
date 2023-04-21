@@ -1,10 +1,10 @@
 use common::{out_path, setup_ctx};
+use sublut::FloatLut2;
 use substrate::component::{Component, NoParams};
 use substrate::pdk::corner::Pvt;
 use substrate::pdk::stdcell::StdCell;
 use substrate::schematic::circuit::Direction;
 use substrate::verification::simulation::waveform::EdgeDir;
-use substrate::verification::timing::lut::FloatLut2;
 use substrate::verification::timing::{ConstraintKind, SetupHoldConstraint};
 
 mod common;

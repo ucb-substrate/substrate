@@ -5,7 +5,7 @@ use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, SlotMap};
 
-use self::lut::{FloatLut1, FloatLut2};
+use sublut::{FloatLut1, FloatLut2};
 
 use super::simulation::waveform::{EdgeDir, SharedWaveform, TimeWaveform};
 use crate::pdk::corner::Pvt;
@@ -16,7 +16,6 @@ use crate::schematic::signal::{NamedSignalPathBuf, SignalInfo, SignalPathBuf, Sl
 use crate::search::{search, SearchSide};
 
 pub mod context;
-pub mod lut;
 
 new_key_type! {
     /// A key for referencing signals in the timing API.
