@@ -121,7 +121,7 @@ impl<'a> SpectreOutputParser<'a> {
             let mut data = Vec::new();
             for i in 0..analysis.analyses.len() {
                 let mut mc_data = Vec::new();
-                for iter in 0..analysis.num_iterations {
+                for iter in 1..analysis.num_iterations+1 {
                     let new_prefix = format!("{}-{:0>3}_{}", name, iter, name);
                     mc_data.push(self.parse_analysis(&new_prefix, i, &analysis.analyses)?);
                 }
@@ -129,28 +129,28 @@ impl<'a> SpectreOutputParser<'a> {
             }
             Ok(AnalysisData::MonteCarlo(MonteCarloData { data }))
         } else {
-        // Spectre chooses this file name by default
-        let file_name = match analysis.analysis_type() {
-            AnalysisType::Ac => {
-                format!("{}.ac", name)
-            }
-            AnalysisType::Tran => {
-                format!("{}.tran.tran", name)
-            }
-            AnalysisType::Dc | AnalysisType::Op => {
-                format!("{}.dc", name)
-            }
-            _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
-        };
-        let psf_path = self.raw_output_dir.join(file_name);
-        let psf = substrate::io::read_to_string(psf_path)?;
-        let ast = psf_ascii::parser::frontend::parse(&psf)?;
-        Ok(match analysis.analysis_type() {
-            AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
-            AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
-            AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
-            _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
-        })
+            // Spectre chooses this file name by default
+            let file_name = match analysis.analysis_type() {
+                AnalysisType::Ac => {
+                    format!("{}.ac", name)
+                }
+                AnalysisType::Tran => {
+                    format!("{}.tran.tran", name)
+                }
+                AnalysisType::Dc | AnalysisType::Op => {
+                    format!("{}.dc", name)
+                }
+                _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
+            };
+            let psf_path = self.raw_output_dir.join(file_name);
+            let psf = substrate::io::read_to_string(psf_path)?;
+            let ast = psf_ascii::parser::frontend::parse(&psf)?;
+            Ok(match analysis.analysis_type() {
+                AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
+                AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
+                AnalysisType::Dc | AnalysisType::Op => dc_conv(PsfDcData::from_ast(&ast)).into(),
+                _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
+            })
         }
     }
 

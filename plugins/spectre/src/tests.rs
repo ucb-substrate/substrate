@@ -111,4 +111,10 @@ fn vdivider_test() {
         out_time.get(out_time.len() - 1).unwrap(),
         10e-3f64
     ));
+
+    assert_eq!(out.data[5].analysis_type(), AnalysisType::MonteCarlo);
+    let out_data = &out.data[5].monte_carlo().data;
+    assert_eq!(out_data.len(), 1);
+    let op_data = &out_data[0];
+    assert_eq!(op_data.len(), 5);
 }

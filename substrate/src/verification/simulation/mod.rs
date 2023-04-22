@@ -274,7 +274,7 @@ impl AnalysisData {
             Self::Tran(_) => AnalysisType::Tran,
             Self::Ac(_) => AnalysisType::Ac,
             Self::Dc(_) => AnalysisType::Dc,
-            Self::MonteCarlo(_) => AnalysisType::Dc,
+            Self::MonteCarlo(_) => AnalysisType::MonteCarlo,
             Self::Other => AnalysisType::Other,
         }
     }
