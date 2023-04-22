@@ -43,7 +43,7 @@ use crate::verification::simulation::context::{PostSimCtx, PreSimCtx};
 use crate::verification::simulation::testbench::Testbench;
 use crate::verification::simulation::{SimInput, SimOpts, Simulator};
 use crate::verification::timing::context::TimingCtx;
-use crate::verification::timing::generate_timing_report;
+use crate::verification::timing::{generate_timing_report, TimingConfig};
 
 pub(crate) struct SubstrateData {
     schematics: SchematicData,
@@ -61,6 +61,7 @@ pub(crate) struct SubstrateData {
     script_map: ScriptMap,
     corner_db: Arc<CornerDb>,
     simulation_bashrc: Option<PathBuf>,
+    timing_config: Option<Arc<TimingConfig>>,
 }
 
 pub struct SubstrateConfig {
@@ -71,6 +72,7 @@ pub struct SubstrateConfig {
     pub lvs_tool: Option<Arc<dyn LvsTool>>,
     pub pex_tool: Option<Arc<dyn PexTool>>,
     pub simulation_bashrc: Option<PathBuf>,
+    pub timing_config: Option<Arc<TimingConfig>>,
 }
 
 #[derive(Default)]
@@ -82,6 +84,7 @@ pub struct SubstrateConfigBuilder {
     pub lvs_tool: Option<Arc<dyn LvsTool>>,
     pub pex_tool: Option<Arc<dyn PexTool>>,
     pub simulation_bashrc: Option<PathBuf>,
+    pub timing_config: Option<Arc<TimingConfig>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Default, Serialize, Deserialize)]
@@ -141,6 +144,7 @@ impl SubstrateData {
             pex_tool: cfg.pex_tool,
             script_map: ScriptMap::new(),
             simulation_bashrc: cfg.simulation_bashrc,
+            timing_config: cfg.timing_config,
         })
     }
 }
@@ -214,6 +218,11 @@ impl SubstrateConfigBuilder {
         self
     }
 
+    pub fn timing_config(&mut self, config: TimingConfig) -> &mut Self {
+        self.timing_config = Some(Arc::new(config));
+        self
+    }
+
     pub fn build(&self) -> SubstrateConfig {
         SubstrateConfig {
             netlister: self.netlister.clone(),
@@ -223,6 +232,7 @@ impl SubstrateConfigBuilder {
             lvs_tool: self.lvs_tool.clone(),
             pex_tool: self.pex_tool.clone(),
             simulation_bashrc: self.simulation_bashrc.clone(),
+            timing_config: self.timing_config.clone(),
         }
     }
 }
@@ -291,6 +301,16 @@ impl SubstrateCtx {
 
     pub fn pex_tool(&self) -> Option<Arc<dyn PexTool>> {
         self.read().pex_tool()
+    }
+
+    pub fn timing_config(&self) -> Option<Arc<TimingConfig>> {
+        self.read().timing_config()
+    }
+
+    pub fn try_timing_config(&self) -> Result<Arc<TimingConfig>> {
+        Ok(self
+            .timing_config()
+            .ok_or(ErrorSource::TimingConfigNotSpecified)?)
     }
 
     pub fn run_script<T>(&self, params: &T::Params) -> Result<Arc<T::Output>>
@@ -789,6 +809,7 @@ impl SubstrateCtx {
         tb.setup(&mut ctx)?;
         self.pdk().pre_sim(&mut ctx)?;
         let simulator = self.simulator().ok_or(ErrorSource::ToolNotSpecified)?;
+        let timing_config = self.try_timing_config()?;
 
         let output = if let VerifyTiming::Yes(ref pvt) = verify_timing {
             let mut constraints = netlist.timing_constraint_db(pvt);
@@ -805,8 +826,12 @@ impl SubstrateCtx {
             let output = simulator.simulate(ctx.into_inner())?;
 
             let data = output.data[0].tran();
-            let report =
-                generate_timing_report(constraints.named_constraints(&netlist), data, &*simulator);
+            let report = generate_timing_report(
+                constraints.named_constraints(&netlist),
+                data,
+                &*simulator,
+                &timing_config,
+            );
 
             report.log();
             if report.is_failure() {
@@ -1024,6 +1049,11 @@ impl SubstrateData {
     #[inline]
     pub(crate) fn simulation_bashrc(&self) -> Option<PathBuf> {
         self.simulation_bashrc.clone()
+    }
+
+    #[inline]
+    pub(crate) fn timing_config(&self) -> Option<Arc<TimingConfig>> {
+        self.timing_config.clone()
     }
 
     #[inline]

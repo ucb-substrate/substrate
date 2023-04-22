@@ -15,12 +15,56 @@ use crate::schematic::context::ModuleKey;
 use crate::schematic::netlist::preprocess::PreprocessedNetlist;
 use crate::schematic::signal::{NamedSignalPathBuf, SignalPathBuf, SliceOne};
 use crate::search::{search, SearchSide};
+use crate::units::SiPrefix;
 
 pub mod context;
 
 new_key_type! {
     /// A key for referencing signals in the timing API.
     pub struct TimingSignalKey;
+}
+
+pub struct TimingConfig {
+    /// The scale for PDK-provided timing information.
+    ///
+    /// For example, if times are specified in picoseconds, `time_unit`
+    /// should be set to [`SiPrefix::Pico`]. If using nanoseconds,
+    /// set `time_unit` to [`SiPrefix::Nano`].
+    time_unit: SiPrefix,
+    /// Thresholds for measuring transition times.
+    ///
+    /// The lower threshold comes first. For example, a 20%-80%
+    /// threshold range would be specified as `[0.2, 0.8]`.
+    ///
+    /// We do not support separate thresholds for rise and fall transitions.
+    slew_thresholds: [f64; 2],
+}
+
+impl TimingConfig {
+    #[inline]
+    pub fn slew_lower_thresh(&self) -> f64 {
+        self.slew_thresholds[0]
+    }
+    #[inline]
+    pub fn slew_upper_thresh(&self) -> f64 {
+        self.slew_thresholds[1]
+    }
+    #[inline]
+    pub fn time_unit(&self) -> SiPrefix {
+        self.time_unit
+    }
+
+    /// Converts a value in seconds to a value in units of `time_unit`.
+    #[inline]
+    pub fn to_time_unit(&self, value: f64) -> f64 {
+        value / self.time_unit.multiplier()
+    }
+
+    /// Converts a value in units of `time_unit` to a value in seconds.
+    #[inline]
+    pub fn from_time_unit(&self, value: f64) -> f64 {
+        value * self.time_unit.multiplier()
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
@@ -443,15 +487,24 @@ pub(crate) fn verify_setup_hold_constraint(
     port_name: &NamedSignalPathBuf,
     related_port_name: &NamedSignalPathBuf,
     report: &mut TimingReportBuilder,
+    config: &TimingConfig,
 ) {
     // if setup, check for data edges starting before `t`, then check that
     // edge's end time.
     // if hold, check for data edges ending after `t`, then check that
     // edge's start time.
     let vdd = constraint.pvt.voltage();
-    let transitions = port.transitions(0.2 * vdd, 0.8 * vdd).collect::<Vec<_>>();
+    let transitions = port
+        .transitions(
+            config.slew_lower_thresh() * vdd,
+            config.slew_upper_thresh() * vdd,
+        )
+        .collect::<Vec<_>>();
     for clk_edge in related_port
-        .transitions(0.2 * vdd, 0.8 * vdd)
+        .transitions(
+            config.slew_lower_thresh() * vdd,
+            config.slew_upper_thresh() * vdd,
+        )
         .filter(|e| e.dir == constraint.related_port_transition)
     {
         let t = clk_edge.center_time();
@@ -462,9 +515,8 @@ pub(crate) fn verify_setup_hold_constraint(
                     |tr| tr.start_time().total_cmp(&t).into(),
                     SearchSide::Before,
                 ) {
-                    // Convert to nanoseconds.
-                    let idx1 = tr.duration() * 1e9;
-                    let idx2 = clk_edge.duration() * 1e9;
+                    let idx1 = config.to_time_unit(tr.duration());
+                    let idx2 = config.to_time_unit(clk_edge.duration());
                     // TODO handle extrapolation and add warning
                     let tsu = if tr.dir().is_rising() {
                         constraint.rise.getf(idx1, idx2).unwrap()
@@ -472,8 +524,7 @@ pub(crate) fn verify_setup_hold_constraint(
                         constraint.fall.getf(idx1, idx2).unwrap()
                     };
 
-                    // Convert from nanoseconds to seconds.
-                    let tsu = tsu / 1e9;
+                    let tsu = config.from_time_unit(tsu);
 
                     let slack = t - tr.end_time() - tsu;
                     report.add_setup_check(slack, || TimingCheck {
@@ -490,10 +541,8 @@ pub(crate) fn verify_setup_hold_constraint(
                     |tr| tr.end_time().total_cmp(&t).into(),
                     SearchSide::After,
                 ) {
-                    // check edge.t() - t > t_hold
-                    // Convert to nanoseconds.
-                    let idx1 = tr.duration() * 1e9;
-                    let idx2 = clk_edge.duration() * 1e9;
+                    let idx1 = config.to_time_unit(tr.duration());
+                    let idx2 = config.to_time_unit(clk_edge.duration());
                     // TODO handle extrapolation and add warning
                     let t_hold = if tr.dir().is_rising() {
                         constraint.rise.getf(idx1, idx2).unwrap()
@@ -501,8 +550,7 @@ pub(crate) fn verify_setup_hold_constraint(
                         constraint.fall.getf(idx1, idx2).unwrap()
                     };
 
-                    // Convert from nanoseconds to seconds.
-                    let t_hold = t_hold / 1e9;
+                    let t_hold = config.from_time_unit(t_hold);
 
                     let slack = tr.start_time() - t - t_hold;
                     report.add_hold_check(slack, || TimingCheck {
@@ -521,6 +569,7 @@ pub(crate) fn generate_timing_report<'a>(
     constraints: impl Iterator<Item = &'a NamedTopConstraint<'a>>,
     data: &'a TranData,
     simulator: &'a dyn Simulator,
+    config: &'a TimingConfig,
 ) -> TimingReport {
     let mut report = TimingReport::builder();
     for constraint in constraints {
@@ -543,6 +592,7 @@ pub(crate) fn generate_timing_report<'a>(
                     &constraint.port,
                     related_port_name,
                     &mut report,
+                    config,
                 );
             }
             _ => todo!(),

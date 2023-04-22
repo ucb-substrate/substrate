@@ -82,6 +82,7 @@ pub trait TimeWaveform {
     }
 
     fn transitions(&self, low_threshold: f64, high_threshold: f64) -> Transitions<'_, Self> {
+        assert!(high_threshold > low_threshold);
         Transitions {
             waveform: self,
             state: TransitionState::Unknown,

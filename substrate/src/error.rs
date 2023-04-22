@@ -198,6 +198,9 @@ pub enum ErrorSource {
     #[error("no tool specified")]
     ToolNotSpecified,
 
+    #[error("no timing config specified")]
+    TimingConfigNotSpecified,
+
     #[error("invalid pdk")]
     InvalidPdk,
 
