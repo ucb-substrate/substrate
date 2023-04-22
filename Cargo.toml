@@ -6,6 +6,7 @@ members = [
     "libs/gds21",
     "libs/subgeom",
     "libs/subgates",
+    "libs/sublut",
     "pdks/sky130_common_pdk",
     "pdks/sky130_open_pdk",
     "pdks/sky130_commercial_pdk",

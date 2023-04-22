@@ -4,7 +4,7 @@ use super::{Analysis, OutputFormat, Save, SimInput, SimOutput};
 use crate::units::SiValue;
 
 pub struct PreSimCtx {
-    input: SimInput,
+    pub(crate) input: SimInput,
 }
 
 pub struct PostSimCtx {

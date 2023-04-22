@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use slotmap::new_key_type;
 use thiserror::Error;
 
 use super::context::{ModuleKey, SchematicCtx};
@@ -55,6 +56,11 @@ impl PortInfo {
     pub fn width(&self) -> usize {
         self.width
     }
+}
+
+new_key_type! {
+    /// A key identifying [`Instance`]s within a [`Module`](super::module::Module).
+    pub struct InstanceKey;
 }
 
 /// An instance of a module in a schematic.

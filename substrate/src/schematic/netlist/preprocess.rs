@@ -9,6 +9,8 @@ use super::super::context::{ModuleKey, SchematicData};
 use super::super::module::Module;
 use crate::deps::arcstr::ArcStr;
 use crate::error::{with_err_context, ErrorContext, Result};
+use crate::index::IndexOwned;
+use crate::schematic::signal::SignalPathBuf;
 
 /// The state of a nestlist preprocessor.
 struct NetlistPreprocessor<'a> {
@@ -141,5 +143,44 @@ impl<'a> NetlistPreprocessor<'a> {
             }
             names.insert(inst.name().to_owned());
         }
+    }
+}
+
+impl PreprocessedNetlist {
+    /// Resolves nested signals in a path, giving the least nested reference to the same signal.
+    pub(crate) fn simplify_path(&self, mut path: SignalPathBuf) -> SignalPathBuf {
+        if path.insts.is_empty() {
+            return path;
+        }
+        let mut modules = Vec::with_capacity(path.insts.len());
+        let mut module = self.top;
+        for inst in path.insts.iter().copied() {
+            let inst = &self.modules[module].instance_map()[inst];
+            module = inst.module().local_id().unwrap();
+            modules.push(module);
+        }
+
+        // modules[i] is the module corresponding to path.insts[i].
+        assert_eq!(modules.len(), path.insts.len());
+
+        let mut slice = path.slice;
+        for i in modules.len() - 1..=0 {
+            let module = &self.modules[modules[i]];
+            let info = &module.signals()[slice.signal];
+            if !info.is_port() {
+                path.insts.truncate(i + 1);
+                return SignalPathBuf::new(path.insts, slice);
+            } else {
+                let parent = if i == 0 {
+                    &self.modules[self.top]
+                } else {
+                    &self.modules[modules[i - 1]]
+                };
+                let i = &parent.instance_map()[path.insts[i]];
+                let sig = &i.connections()[info.name()];
+                slice = sig.index(slice.idx).into_single();
+            }
+        }
+        SignalPathBuf::new(Vec::new(), slice)
     }
 }

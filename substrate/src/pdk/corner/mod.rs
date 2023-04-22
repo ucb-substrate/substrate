@@ -14,6 +14,17 @@ new_key_type! {
     pub struct CornerKey;
 }
 
+///
+#[derive(Debug, Clone, PartialEq, Builder, Serialize, Deserialize)]
+pub struct Pvt {
+    /// The process corner.
+    corner: CornerEntry,
+    /// Supply voltage, in volts.
+    voltage: f64,
+    /// Temperature, in degrees Celsius.
+    temp: f64,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Builder, Serialize, Deserialize)]
 pub struct CornerEntry {
     id: CornerKey,
@@ -25,7 +36,6 @@ pub struct CornerEntry {
 pub struct CornerData {
     #[builder(setter(into))]
     name: ArcStr,
-
     #[builder(default, setter(strip_option))]
     nmos: Option<CornerSkew>,
     #[builder(default, setter(strip_option))]
@@ -38,6 +48,17 @@ pub enum CornerSkew {
     #[default]
     Typical,
     Fast,
+}
+
+impl Pvt {
+    #[inline]
+    pub fn new(corner: CornerEntry, voltage: f64, temp: f64) -> Self {
+        Self {
+            corner,
+            voltage,
+            temp,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -87,6 +108,23 @@ impl CornerEntry {
     #[inline]
     pub fn pmos(&self) -> Option<CornerSkew> {
         self.data.pmos()
+    }
+}
+
+impl Pvt {
+    #[inline]
+    pub fn corner(&self) -> &CornerEntry {
+        &self.corner
+    }
+
+    #[inline]
+    pub fn voltage(&self) -> f64 {
+        self.voltage
+    }
+
+    #[inline]
+    pub fn temp(&self) -> f64 {
+        self.temp
     }
 }
 

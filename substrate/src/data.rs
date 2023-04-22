@@ -19,9 +19,9 @@ use crate::layout::cell::{Cell, CellKey, Instance as LayoutInstance};
 use crate::layout::context::{LayoutCtx, LayoutData};
 use crate::layout::layers::{Layers, LayersRef};
 use crate::layout::LayoutFormat;
-use crate::log;
+use crate::log::{self, Log};
 use crate::pdk::corner::error::ProcessCornerError;
-use crate::pdk::corner::{CornerDb, CornerEntry};
+use crate::pdk::corner::{CornerDb, CornerEntry, Pvt};
 use crate::pdk::mos::db::MosDb;
 use crate::pdk::stdcell::StdCellDb;
 use crate::pdk::Pdk;
@@ -42,6 +42,8 @@ use crate::verification::pex::{PexInput, PexOutput, PexTool};
 use crate::verification::simulation::context::{PostSimCtx, PreSimCtx};
 use crate::verification::simulation::testbench::Testbench;
 use crate::verification::simulation::{SimInput, SimOpts, Simulator};
+use crate::verification::timing::context::TimingCtx;
+use crate::verification::timing::{generate_timing_report, TimingConfig};
 
 pub(crate) struct SubstrateData {
     schematics: SchematicData,
@@ -59,6 +61,7 @@ pub(crate) struct SubstrateData {
     script_map: ScriptMap,
     corner_db: Arc<CornerDb>,
     simulation_bashrc: Option<PathBuf>,
+    timing_config: Option<Arc<TimingConfig>>,
 }
 
 pub struct SubstrateConfig {
@@ -69,6 +72,7 @@ pub struct SubstrateConfig {
     pub lvs_tool: Option<Arc<dyn LvsTool>>,
     pub pex_tool: Option<Arc<dyn PexTool>>,
     pub simulation_bashrc: Option<PathBuf>,
+    pub timing_config: Option<Arc<TimingConfig>>,
 }
 
 #[derive(Default)]
@@ -80,6 +84,7 @@ pub struct SubstrateConfigBuilder {
     pub lvs_tool: Option<Arc<dyn LvsTool>>,
     pub pex_tool: Option<Arc<dyn PexTool>>,
     pub simulation_bashrc: Option<PathBuf>,
+    pub timing_config: Option<Arc<TimingConfig>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Default, Serialize, Deserialize)]
@@ -111,6 +116,14 @@ pub(crate) struct InnerWriteSchematicArgs<W> {
     out: W,
 }
 
+/// Whether or not to verify timing constraints for transient simulations.
+pub enum VerifyTiming {
+    /// Do **not** verify timing constraints.
+    No,
+    /// Verify timing constraints in the given [`Pvt`] corner.
+    Yes(Pvt),
+}
+
 impl SubstrateData {
     #[inline]
     pub(crate) fn from_config(cfg: SubstrateConfig) -> Result<Self> {
@@ -131,6 +144,7 @@ impl SubstrateData {
             pex_tool: cfg.pex_tool,
             script_map: ScriptMap::new(),
             simulation_bashrc: cfg.simulation_bashrc,
+            timing_config: cfg.timing_config,
         })
     }
 }
@@ -204,6 +218,11 @@ impl SubstrateConfigBuilder {
         self
     }
 
+    pub fn timing_config(&mut self, config: TimingConfig) -> &mut Self {
+        self.timing_config = Some(Arc::new(config));
+        self
+    }
+
     pub fn build(&self) -> SubstrateConfig {
         SubstrateConfig {
             netlister: self.netlister.clone(),
@@ -213,6 +232,7 @@ impl SubstrateConfigBuilder {
             lvs_tool: self.lvs_tool.clone(),
             pex_tool: self.pex_tool.clone(),
             simulation_bashrc: self.simulation_bashrc.clone(),
+            timing_config: self.timing_config.clone(),
         }
     }
 }
@@ -281,6 +301,16 @@ impl SubstrateCtx {
 
     pub fn pex_tool(&self) -> Option<Arc<dyn PexTool>> {
         self.read().pex_tool()
+    }
+
+    pub fn timing_config(&self) -> Option<Arc<TimingConfig>> {
+        self.read().timing_config()
+    }
+
+    pub fn try_timing_config(&self) -> Result<Arc<TimingConfig>> {
+        Ok(self
+            .timing_config()
+            .ok_or(ErrorSource::TimingConfigNotSpecified)?)
     }
 
     pub fn run_script<T>(&self, params: &T::Params) -> Result<Arc<T::Output>>
@@ -360,6 +390,29 @@ impl SubstrateCtx {
         let mut inner = self.write();
         inner.write_schematic(args)?;
         Ok(())
+    }
+
+    pub(crate) fn _write_schematic_for_purpose<T, W: Write>(
+        &self,
+        args: WriteSchematicArgs<T::Params, W>,
+    ) -> Result<PreprocessedNetlist>
+    where
+        T: Component,
+    {
+        let inst = self.instantiate_schematic::<T>(args.params)?;
+        let top = inst
+            .module()
+            .local_id()
+            .ok_or(ErrorSource::NetlistExternalModule)?;
+        let args = InnerWriteSchematicArgs {
+            top,
+            flatten_top: args.flatten_top,
+            purpose: args.purpose,
+            out: args.out,
+        };
+        let mut inner = self.write();
+        let netlist = inner.write_schematic(args)?;
+        Ok(netlist)
     }
 
     #[inline]
@@ -660,12 +713,15 @@ impl SubstrateCtx {
         T: Testbench,
     {
         let work_dir = work_dir.as_ref();
-        with_err_context(self._write_simulation::<T>(params, work_dir, None), || {
-            ErrorContext::Task(arcstr::format!(
-                "running simulation in working directory {:?}",
-                work_dir
-            ))
-        })
+        with_err_context(
+            self._write_simulation::<T>(params, work_dir, None, VerifyTiming::No),
+            || {
+                ErrorContext::Task(arcstr::format!(
+                    "running simulation in working directory {:?}",
+                    work_dir
+                ))
+            },
+        )
     }
 
     pub fn write_simulation_with_corner<T>(
@@ -679,7 +735,7 @@ impl SubstrateCtx {
     {
         let work_dir = work_dir.as_ref();
         with_err_context(
-            self._write_simulation::<T>(params, work_dir, Some(corner)),
+            self._write_simulation::<T>(params, work_dir, Some(corner), VerifyTiming::No),
             || {
                 ErrorContext::Task(arcstr::format!(
                     "running simulation in working directory {:?}",
@@ -689,11 +745,12 @@ impl SubstrateCtx {
         )
     }
 
-    fn _write_simulation<T>(
+    pub fn _write_simulation<T>(
         &self,
         params: &T::Params,
         work_dir: impl AsRef<Path>,
         corner: Option<CornerEntry>,
+        verify_timing: VerifyTiming,
     ) -> Result<T::Output>
     where
         T: Testbench,
@@ -728,7 +785,7 @@ impl SubstrateCtx {
             },
         };
 
-        self.write_schematic_for_purpose::<T, _>(args)?;
+        let netlist: PreprocessedNetlist = self._write_schematic_for_purpose::<T, _>(args)?;
 
         f.flush()?;
         drop(f);
@@ -751,9 +808,40 @@ impl SubstrateCtx {
 
         tb.setup(&mut ctx)?;
         self.pdk().pre_sim(&mut ctx)?;
-
         let simulator = self.simulator().ok_or(ErrorSource::ToolNotSpecified)?;
-        let output = simulator.simulate(ctx.into_inner())?;
+        let timing_config = self.try_timing_config()?;
+
+        let output = if let VerifyTiming::Yes(ref pvt) = verify_timing {
+            let mut constraints = netlist.timing_constraint_db(pvt);
+
+            for constraint in constraints.named_constraints(&netlist) {
+                let port = simulator.node_voltage_string(&constraint.port);
+                ctx.input.save.add(port);
+                if let Some(ref related_port) = constraint.related_port {
+                    let related_port = simulator.node_voltage_string(related_port);
+                    ctx.input.save.add(related_port);
+                }
+            }
+
+            let output = simulator.simulate(ctx.into_inner())?;
+
+            let data = output.data[0].tran();
+            let report = generate_timing_report(
+                constraints.named_constraints(&netlist),
+                data,
+                &*simulator,
+                &timing_config,
+            );
+
+            report.log();
+            if report.is_failure() {
+                return Err(ErrorSource::TimingFailed(report).into());
+            }
+
+            output
+        } else {
+            simulator.simulate(ctx.into_inner())?
+        };
 
         let mut ctx = PostSimCtx { output };
         tb.post_sim(&mut ctx)?;
@@ -795,15 +883,22 @@ impl SubstrateCtx {
         ctx.module.set_name(component.name());
         with_err_context(component.schematic(&mut ctx), || {
             ErrorContext::GenComponent {
-                name,
+                name: name.clone(),
                 type_name: std::any::type_name::<T>().into(),
                 view: View::Schematic,
             }
         })?;
 
+        let mut ctx = TimingCtx::new(ctx.module, self.clone());
+        with_err_context(component.timing(&mut ctx), || ErrorContext::GenComponent {
+            name,
+            type_name: std::any::type_name::<T>().into(),
+            view: View::Timing,
+        })?;
+
         let module = {
             let mut inner = self.write();
-            inner.schematics.set_module(ctx.module)
+            inner.schematics.set_module(ctx.into_module())
         };
 
         Ok(module)
@@ -957,6 +1052,11 @@ impl SubstrateData {
     }
 
     #[inline]
+    pub(crate) fn timing_config(&self) -> Option<Arc<TimingConfig>> {
+        self.timing_config.clone()
+    }
+
+    #[inline]
     pub(crate) fn lvs_tool(&self) -> Option<Arc<dyn LvsTool>> {
         self.lvs_tool.clone()
     }
@@ -966,7 +1066,10 @@ impl SubstrateData {
         self.pex_tool.clone()
     }
 
-    pub(crate) fn write_schematic<W>(&mut self, args: InnerWriteSchematicArgs<W>) -> Result<()>
+    pub(crate) fn write_schematic<W>(
+        &mut self,
+        args: InnerWriteSchematicArgs<W>,
+    ) -> Result<PreprocessedNetlist>
     where
         W: Write,
     {
@@ -976,7 +1079,10 @@ impl SubstrateData {
         })
     }
 
-    fn _write_schematic<W>(&mut self, args: InnerWriteSchematicArgs<W>) -> Result<()>
+    fn _write_schematic<W>(
+        &mut self,
+        args: InnerWriteSchematicArgs<W>,
+    ) -> Result<PreprocessedNetlist>
     where
         W: Write,
     {
@@ -1067,7 +1173,7 @@ impl SubstrateData {
 
         netlister.emit_end(&mut out)?;
         out.flush()?;
-        Ok(())
+        Ok(netlist)
     }
 
     fn get_external_module<Q>(&self, name: &Q) -> Result<Arc<ExternalModule>>

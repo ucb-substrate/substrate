@@ -81,6 +81,19 @@ pub trait TimeWaveform {
         }
     }
 
+    fn transitions(&self, low_threshold: f64, high_threshold: f64) -> Transitions<'_, Self> {
+        assert!(high_threshold > low_threshold);
+        Transitions {
+            waveform: self,
+            state: TransitionState::Unknown,
+            t: 0.0,
+            prev_idx: 0,
+            idx: 0,
+            low_thresh: low_threshold,
+            high_thresh: high_threshold,
+        }
+    }
+
     fn values(&self) -> Values<'_, Self> {
         Values {
             waveform: self,
@@ -147,7 +160,7 @@ impl TimeWaveform for Waveform {
 
 impl<'a> TimeWaveform for SharedWaveform<'a> {
     fn get(&self, idx: usize) -> Option<TimePoint> {
-        if idx > self.len() {
+        if idx >= self.len() {
             return None;
         }
         Some(TimePoint::new(self.t[idx], self.x[idx]))
@@ -176,6 +189,40 @@ pub struct Edges<'a, T: ?Sized> {
     waveform: &'a T,
     idx: usize,
     thresh: f64,
+}
+
+#[derive(
+    Debug, Default, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize,
+)]
+enum TransitionState {
+    /// High at the given time.
+    High,
+    #[default]
+    Unknown,
+    /// Low at the given time.
+    Low,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Serialize)]
+pub struct Transitions<'a, T: ?Sized> {
+    waveform: &'a T,
+    state: TransitionState,
+    /// Time at which the waveform was in either a high or low state.
+    t: f64,
+    prev_idx: usize,
+    /// Index of the **next** element to process.
+    idx: usize,
+    low_thresh: f64,
+    high_thresh: f64,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Serialize, Deserialize)]
+pub struct Transition {
+    pub(crate) start_t: f64,
+    pub(crate) end_t: f64,
+    pub(crate) start_idx: usize,
+    pub(crate) end_idx: usize,
+    pub(crate) dir: EdgeDir,
 }
 
 impl Waveform {
@@ -292,6 +339,90 @@ where
 }
 impl<'a, T> FusedIterator for Edges<'a, T> where T: TimeWaveform {}
 
+impl<'a, T> Transitions<'a, T>
+where
+    T: TimeWaveform,
+{
+    fn check(&mut self) -> Option<(TransitionState, f64)> {
+        let pt = self.waveform.get(self.idx)?;
+        Some((
+            if pt.x >= self.high_thresh {
+                TransitionState::High
+            } else if pt.x <= self.low_thresh {
+                TransitionState::Low
+            } else {
+                TransitionState::Unknown
+            },
+            pt.t,
+        ))
+    }
+}
+
+impl<'a, T> Iterator for Transitions<'a, T>
+where
+    T: TimeWaveform,
+{
+    type Item = Transition;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.waveform.len() - 1 {
+            return None;
+        }
+        loop {
+            use TransitionState::*;
+
+            let (val, t) = self.check()?;
+            let end_idx = self.idx;
+            self.idx += 1;
+
+            match (self.state, val) {
+                (High, Low) => {
+                    self.state = Low;
+                    let (old_t, old_idx) = (self.t, self.prev_idx);
+                    self.prev_idx = end_idx;
+                    self.t = t;
+                    return Some(Transition {
+                        start_t: old_t,
+                        end_t: t,
+                        start_idx: old_idx,
+                        end_idx,
+                        dir: EdgeDir::Falling,
+                    });
+                }
+                (Low, High) => {
+                    self.state = High;
+                    let (old_t, old_idx) = (self.t, self.prev_idx);
+                    self.prev_idx = end_idx;
+                    self.t = t;
+                    return Some(Transition {
+                        start_t: old_t,
+                        end_t: t,
+                        start_idx: old_idx,
+                        end_idx,
+                        dir: EdgeDir::Rising,
+                    });
+                }
+                (Unknown, High) => {
+                    self.state = High;
+                    self.t = t;
+                    self.prev_idx = end_idx;
+                }
+                (Unknown, Low) => {
+                    self.state = Low;
+                    self.t = t;
+                    self.prev_idx = end_idx;
+                }
+                (High, High) | (Low, Low) => {
+                    self.t = t;
+                    self.prev_idx = end_idx;
+                }
+                _ => (),
+            }
+        }
+    }
+}
+
+impl<'a, T> FusedIterator for Transitions<'a, T> where T: TimeWaveform {}
+
 impl Default for Waveform {
     #[inline]
     fn default() -> Self {
@@ -312,8 +443,21 @@ impl std::ops::IndexMut<usize> for Waveform {
     }
 }
 
+impl EdgeDir {
+    #[inline]
+    pub fn is_rising(&self) -> bool {
+        matches!(self, EdgeDir::Rising)
+    }
+
+    #[inline]
+    pub fn is_falling(&self) -> bool {
+        matches!(self, EdgeDir::Falling)
+    }
+}
+
 impl Edge {
     /// The direction (rising or falling) of the edge.
+    #[inline]
     pub fn dir(&self) -> EdgeDir {
         self.dir
     }
@@ -321,18 +465,60 @@ impl Edge {
     /// The time at which the waveform crossed the threshold.
     ///
     /// The waveform is linearly interpolated to find the threshold crossing time.
+    #[inline]
     pub fn t(&self) -> f64 {
         self.t
     }
 
     /// The index in the waveform **before** the threshold was passed.
+    #[inline]
     pub fn idx_before(&self) -> usize {
         self.start_idx
     }
 
     /// The index in the waveform **after** the threshold was passed.
+    #[inline]
     pub fn idx_after(&self) -> usize {
         self.start_idx + 1
+    }
+}
+
+impl Transition {
+    /// The direction (rising or falling) of the transition.
+    #[inline]
+    pub fn dir(&self) -> EdgeDir {
+        self.dir
+    }
+
+    #[inline]
+    pub fn start_time(&self) -> f64 {
+        self.start_t
+    }
+
+    #[inline]
+    pub fn end_time(&self) -> f64 {
+        self.end_t
+    }
+
+    #[inline]
+    pub fn start_idx(&self) -> usize {
+        self.start_idx
+    }
+
+    #[inline]
+    pub fn end_idx(&self) -> usize {
+        self.end_idx
+    }
+
+    #[inline]
+    pub fn duration(&self) -> f64 {
+        self.end_time() - self.start_time()
+    }
+
+    /// The average of the start and end times.
+    #[inline]
+    pub fn center_time(&self) -> f64 {
+        (self.start_time() + self.end_time()) / 2.0
     }
 }
 
@@ -445,6 +631,40 @@ mod tests {
                     start_idx: 4,
                     dir: EdgeDir::Rising,
                 }
+            ]
+        );
+    }
+
+    #[test]
+    fn waveform_transitions() {
+        let wav = Waveform {
+            values: into_vec![(0., 0.), (1., 1.), (2., 0.9), (3., 0.1), (4., 0.), (5., 1.)],
+        };
+        let transitions = wav.transitions(0.1, 0.9).collect_vec();
+        assert_eq!(
+            transitions,
+            vec![
+                Transition {
+                    start_t: 0.,
+                    start_idx: 0,
+                    end_t: 1.,
+                    end_idx: 1,
+                    dir: EdgeDir::Rising,
+                },
+                Transition {
+                    start_t: 2.,
+                    start_idx: 2,
+                    end_t: 3.,
+                    end_idx: 3,
+                    dir: EdgeDir::Falling,
+                },
+                Transition {
+                    start_t: 4.,
+                    start_idx: 4,
+                    end_t: 5.,
+                    end_idx: 5,
+                    dir: EdgeDir::Rising,
+                },
             ]
         );
     }

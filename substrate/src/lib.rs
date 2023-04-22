@@ -14,6 +14,7 @@ pub mod macros;
 pub mod pdk;
 pub mod schematic;
 pub mod script;
+pub mod search;
 pub mod units;
 pub mod validation;
 pub mod verification;

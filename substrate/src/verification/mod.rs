@@ -4,3 +4,4 @@ pub mod drc;
 pub mod lvs;
 pub mod pex;
 pub mod simulation;
+pub mod timing;

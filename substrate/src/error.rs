@@ -12,14 +12,22 @@ use crate::layout::straps::PowerStrapError;
 use crate::pdk::corner::error::ProcessCornerError;
 use crate::pdk::mos::error::MosError;
 use crate::pdk::stdcell::error::StdCellError;
+use crate::schematic::circuit::PortError as SchematicPortError;
 use crate::schematic::netlist::interface::NetlistError;
 use crate::verification::simulation::bits::BitConvError;
+use crate::verification::timing::TimingReport;
 
 pub type Result<T> = std::result::Result<T, SubstrateError>;
 
 pub struct SubstrateError {
     pub(crate) source: ErrorSource,
     pub(crate) context: Vec<ErrorContext>,
+}
+
+impl SubstrateError {
+    pub fn source(&self) -> &ErrorSource {
+        &self.source
+    }
 }
 
 impl std::error::Error for SubstrateError {
@@ -190,6 +198,9 @@ pub enum ErrorSource {
     #[error("no tool specified")]
     ToolNotSpecified,
 
+    #[error("no timing config specified")]
+    TimingConfigNotSpecified,
+
     #[error("invalid pdk")]
     InvalidPdk,
 
@@ -217,14 +228,20 @@ pub enum ErrorSource {
     #[error("port index out of bounds: {index} is out of bounds for port with width {width}")]
     PortIndexOutOfBounds { width: usize, index: usize },
 
-    #[error("error accessing port: {0}")]
-    Port(#[from] PortError),
+    #[error("error accessing layout port: {0}")]
+    LayoutPort(#[from] PortError),
+
+    #[error("error accessing schematic port: {0}")]
+    SchematicPort(#[from] SchematicPortError),
 
     #[error("error performing automatic routing: {0}")]
     AutoRouting(#[from] routing::auto::error::Error),
 
     #[error("error converting signal to logic level: {0}")]
     BitConv(#[from] BitConvError),
+
+    #[error("timing constraints not satisfied; see report for more details")]
+    TimingFailed(TimingReport),
 
     #[error("unexpected error: {0}")]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),

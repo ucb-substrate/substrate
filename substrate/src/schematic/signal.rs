@@ -1,7 +1,9 @@
 use std::ops::{Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive};
 
+use serde::{Deserialize, Serialize};
 use slotmap::new_key_type;
 
+use super::circuit::InstanceKey;
 use crate::deps::arcstr::ArcStr;
 use crate::index::IndexOwned;
 
@@ -10,10 +12,33 @@ new_key_type! {
     pub struct SignalKey;
 }
 
+/// A path to a node in a circuit, starting from the top-level module.
+///
+/// Signal paths are preserved even after automatic module and instance renaming.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SignalPathBuf {
+    pub(crate) insts: Vec<InstanceKey>,
+    pub(crate) slice: SliceOne,
+}
+
+/// A path to a node in a circuit, starting from the top-level module.
+///
+/// Uses string identifiers instead of opaque IDs.
+///
+/// `NamedSignalPathBuf`s are NOT preserved after automatic module and instance renaming.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct NamedSignalPathBuf {
+    pub insts: Vec<ArcStr>,
+    pub signal: ArcStr,
+    pub idx: Option<usize>,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SignalInfo {
     name: ArcStr,
     width: usize,
+    /// Whether or not this signal is a port.
+    is_port: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -21,16 +46,47 @@ pub struct Signal {
     parts: Vec<Slice>,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Slice {
     signal: SignalKey,
     range: SliceRange,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+/// A slice with a width of 1.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SliceOne {
+    pub(crate) signal: SignalKey,
+    pub(crate) idx: usize,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct SliceRange {
     start: usize,
     end: usize,
+}
+
+impl SliceOne {
+    #[inline]
+    pub fn new(signal: SignalKey, idx: usize) -> Self {
+        Self { signal, idx }
+    }
+
+    pub fn from_slice(slice: Slice) -> Self {
+        assert_eq!(slice.width(), 1);
+        Self {
+            signal: slice.signal,
+            idx: slice.range.start,
+        }
+    }
+}
+
+impl From<SliceOne> for Slice {
+    fn from(value: SliceOne) -> Self {
+        Self {
+            signal: value.signal,
+            range: SliceRange::new(value.idx, value.idx + 1),
+        }
+    }
 }
 
 impl SliceRange {
@@ -66,10 +122,11 @@ impl IntoIterator for SliceRange {
 
 impl SignalInfo {
     #[inline]
-    pub fn new(name: impl Into<ArcStr>, width: usize) -> Self {
+    pub fn new(name: impl Into<ArcStr>, width: usize, is_port: bool) -> Self {
         Self {
             name: name.into(),
             width,
+            is_port,
         }
     }
 
@@ -86,6 +143,11 @@ impl SignalInfo {
     #[inline]
     pub fn set_name(&mut self, name: impl Into<ArcStr>) {
         self.name = name.into();
+    }
+
+    #[inline]
+    pub fn is_port(&self) -> bool {
+        self.is_port
     }
 }
 
@@ -116,6 +178,11 @@ impl Slice {
     #[inline]
     pub fn signal(&self) -> SignalKey {
         self.signal
+    }
+
+    #[inline]
+    pub fn into_single(self) -> SliceOne {
+        SliceOne::from_slice(self)
     }
 }
 
@@ -224,6 +291,21 @@ impl IndexOwned<RangeToInclusive<usize>> for SliceRange {
     }
 }
 
+impl IndexOwned<usize> for Signal {
+    type Output = Slice;
+
+    fn index(&self, mut index: usize) -> Self::Output {
+        for part in self.parts.iter() {
+            let width = part.width();
+            if index < width {
+                return part.index(index);
+            }
+            index -= width;
+        }
+        panic!("index {index} out of bounds for signal");
+    }
+}
+
 impl From<Slice> for Signal {
     fn from(value: Slice) -> Self {
         Self { parts: vec![value] }
@@ -266,5 +348,12 @@ impl Signal {
 
     pub fn width(&self) -> usize {
         self.parts.iter().map(Slice::width).sum()
+    }
+}
+
+impl SignalPathBuf {
+    #[inline]
+    pub fn new(insts: Vec<InstanceKey>, slice: SliceOne) -> Self {
+        Self { insts, slice }
     }
 }

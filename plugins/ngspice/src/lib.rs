@@ -55,6 +55,25 @@ impl Simulator for Ngspice {
 
         Ok(out)
     }
+
+    fn node_voltage_string(
+        &self,
+        path: &substrate::schematic::signal::NamedSignalPathBuf,
+    ) -> String {
+        use std::fmt::Write;
+        let mut s = String::new();
+        s.push_str("v(");
+        for inst in path.insts.iter() {
+            s.push_str(inst);
+            s.push('.');
+        }
+        s.push_str(&path.signal);
+        if let Some(idx) = path.idx {
+            write!(&mut s, "[{idx}]").expect("failed to write node voltage string");
+        }
+        s.push(')');
+        s
+    }
 }
 
 fn get_analyses(input: &[Analysis]) -> Vec<String> {
