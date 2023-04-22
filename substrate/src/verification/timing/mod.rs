@@ -25,6 +25,7 @@ new_key_type! {
 }
 
 #[derive(Debug, Clone, PartialEq, Builder, Serialize, Deserialize)]
+#[allow(clippy::needless_borrow)]
 #[builder(build_fn(validate = "Self::validate"))]
 pub struct TimingConfig {
     /// The scale for PDK-provided timing information.
