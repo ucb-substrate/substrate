@@ -118,14 +118,18 @@ fn vdivider_test() {
     assert_eq!(op_data.len(), 200);
     let vout: Vec<f64> = op_data.iter().map(|analysis| analysis.op().data.get("Xdut.out").unwrap().value).collect();
     let vout_avg = (&vout).mean();
-    let vout_dev = (&vout).std_dev();
+    let vout_stddev = (&vout).std_dev();
+    println!("avg: {:?}", vout_avg);
+    println!("stddev: {:?}", vout_stddev);
     assert!(abs_diff_eq!(
         vout_avg,
-        0.9,
+        0.6,
+        epsilon = 0.004
     ));
     assert!(abs_diff_eq!(
-        vout_dev,
-        0.125,
+        vout_stddev,
+        0.08,
+        epsilon = 0.002
     ));
 
 

@@ -26,7 +26,7 @@ statistics {
   process {
   }
   mismatch {
-    vary vmax dist=gauss std=1.8/0.25
+    vary vmax dist=gauss std=0.24
   }
 }
 Xdut 0 vdivider_tb

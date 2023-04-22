@@ -13,7 +13,7 @@ use serde::Serialize;
 use substrate::verification::simulation::{
     AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, MonteCarloData,
     OutputFormat, Quantity, RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts,
-    SweepMode, TranData, Variations,
+    SweepMode, TranData, Variations, OpData, ScalarSignal
 };
 use templates::{render_netlist, NetlistCtx};
 use tera::{Context, Tera};
@@ -67,15 +67,6 @@ fn ac_conv(parsed_data: PsfAcData) -> AcData {
 fn dc_conv(parsed_data: PsfDcData) -> DcData {
     DcData {
         data: match parsed_data {
-            PsfDcData::Op(data) => HashMap::from_iter(data.signals.into_iter().map(|(k, v)| {
-                (
-                    k,
-                    RealSignal {
-                        values: vec![v],
-                        quantity: Quantity::Unknown,
-                    },
-                )
-            })),
             PsfDcData::Sweep(data) => HashMap::from_iter(
                 data.signals
                     .into_iter()
@@ -90,6 +81,28 @@ fn dc_conv(parsed_data: PsfDcData) -> DcData {
                         )
                     }),
             ),
+            PsfDcData::Op(_) => panic!("expected dc sweep, found an op analysis")
+        },
+    }
+}
+
+fn op_conv(parsed_data: PsfDcData) -> OpData {
+    OpData {
+        data: match parsed_data {
+            PsfDcData::Op(data) => HashMap::from_iter(
+                data.signals
+                    .into_iter()
+                    .map(|(k, v)| {
+                        (
+                            k,
+                            ScalarSignal {
+                                value: v,
+                                quantity: Quantity::Unknown,
+                            },
+                        )
+                    }),
+            ),
+            PsfDcData::Sweep(_) => panic!("expected op analysis, found a dc sweep")
         },
     }
 }
@@ -153,7 +166,8 @@ impl<'a> SpectreOutputParser<'a> {
             Ok(match analysis.analysis_type() {
                 AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
                 AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
-                AnalysisType::Dc | AnalysisType::Op => dc_conv(PsfDcData::from_ast(&ast)).into(),
+                AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
+                AnalysisType::Op => op_conv(PsfDcData::from_ast(&ast)).into(),
                 _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
             })
         }
