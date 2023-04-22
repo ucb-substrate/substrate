@@ -11,9 +11,9 @@ use psf_ascii::parser::analysis::dc::DcData as PsfDcData;
 use psf_ascii::parser::analysis::transient::TransientData;
 use serde::Serialize;
 use substrate::verification::simulation::{
-    AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, OutputFormat, Quantity,
-    RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts, SweepMode, TranData,
-    Variations, MonteCarloData
+    AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, MonteCarloData,
+    OutputFormat, Quantity, RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts,
+    SweepMode, TranData, Variations,
 };
 use templates::{render_netlist, NetlistCtx};
 use tera::{Context, Tera};
@@ -88,7 +88,7 @@ fn dc_conv(parsed_data: PsfDcData) -> DcData {
                                 quantity: Quantity::Unknown,
                             },
                         )
-                    })
+                    }),
             ),
         },
     }
@@ -113,7 +113,12 @@ impl<'a> SpectreOutputParser<'a> {
         Self { raw_output_dir }
     }
 
-    fn parse_analysis(&mut self, prefix: &str, num: usize, analyses: &Vec<Analysis>) -> Result<AnalysisData> {
+    fn parse_analysis(
+        &mut self,
+        prefix: &str,
+        num: usize,
+        analyses: &[Analysis],
+    ) -> Result<AnalysisData> {
         let analysis = &analyses[num];
         let name = analysis_name(prefix, num);
 
@@ -121,7 +126,7 @@ impl<'a> SpectreOutputParser<'a> {
             let mut data = Vec::new();
             for i in 0..analysis.analyses.len() {
                 let mut mc_data = Vec::new();
-                for iter in 1..analysis.num_iterations+1 {
+                for iter in 1..analysis.num_iterations + 1 {
                     let new_prefix = format!("{}-{:0>3}_{}", name, iter, name);
                     mc_data.push(self.parse_analysis(&new_prefix, i, &analysis.analyses)?);
                 }
@@ -140,7 +145,7 @@ impl<'a> SpectreOutputParser<'a> {
                 AnalysisType::Dc | AnalysisType::Op => {
                     format!("{}.dc", name)
                 }
-                _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
+                _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
             };
             let psf_path = self.raw_output_dir.join(file_name);
             let psf = substrate::io::read_to_string(psf_path)?;
@@ -149,7 +154,7 @@ impl<'a> SpectreOutputParser<'a> {
                 AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
                 AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
                 AnalysisType::Dc | AnalysisType::Op => dc_conv(PsfDcData::from_ast(&ast)).into(),
-                _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
+                _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
             })
         }
     }

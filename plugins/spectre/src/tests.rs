@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
 use approx::abs_diff_eq;
+use statrs::statistics::Statistics;
 use substrate::verification::simulation::{
-    AcAnalysis, Analysis, AnalysisType, SimInput, Simulator, SimulatorOpts, SweepMode, TranAnalysis,
-    OpAnalysis, MonteCarloAnalysis, Variations, 
+    AcAnalysis, Analysis, AnalysisType, MonteCarloAnalysis, OpAnalysis, SimInput, Simulator,
+    SimulatorOpts, SweepMode, TranAnalysis, Variations,
 };
 
 use crate::Spectre;
@@ -61,11 +62,9 @@ fn vdivider_test() {
             Analysis::MonteCarlo(
                 MonteCarloAnalysis::builder()
                     .variations(Variations::Mismatch)
-                    .num_iterations(5)
+                    .num_iterations(200)
                     .seed(1234)
-                    .analyses(vec![
-                        Analysis::Op(OpAnalysis::new())
-                    ])
+                    .analyses(vec![Analysis::Op(OpAnalysis::new())])
                     .build()
                     .unwrap(),
             ),
@@ -116,5 +115,18 @@ fn vdivider_test() {
     let out_data = &out.data[5].monte_carlo().data;
     assert_eq!(out_data.len(), 1);
     let op_data = &out_data[0];
-    assert_eq!(op_data.len(), 5);
+    assert_eq!(op_data.len(), 200);
+    let vout: Vec<f64> = op_data.iter().map(|analysis| analysis.op().data.get("Xdut.out").unwrap().value).collect();
+    let vout_avg = (&vout).mean();
+    let vout_dev = (&vout).std_dev();
+    assert!(abs_diff_eq!(
+        vout_avg,
+        0.9,
+    ));
+    assert!(abs_diff_eq!(
+        vout_dev,
+        0.125,
+    ));
+
+
 }
