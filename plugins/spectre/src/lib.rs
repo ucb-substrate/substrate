@@ -13,7 +13,7 @@ use serde::Serialize;
 use substrate::verification::simulation::{
     AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, OutputFormat, Quantity,
     RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts, SweepMode, TranData,
-    MonteCarloAnalysis, Variations, OpAnalysis, MonteCarloData
+    Variations, MonteCarloData
 };
 use templates::{render_netlist, NetlistCtx};
 use tera::{Context, Tera};
@@ -113,22 +113,33 @@ impl<'a> SpectreOutputParser<'a> {
         Self { raw_output_dir }
     }
 
-    fn parse_analysis(&mut self, num: usize, input: &SimInput) -> Result<AnalysisData> {
-        let analyses = &input.analyses;
+    fn parse_analysis(&mut self, prefix: &str, num: usize, analyses: &Vec<Analysis>) -> Result<AnalysisData> {
         let analysis = &analyses[num];
+        let name = analysis_name(prefix, num);
 
+        if let Analysis::MonteCarlo(analysis) = analysis {
+            let mut data = Vec::new();
+            for i in 0..analysis.analyses.len() {
+                let mut mc_data = Vec::new();
+                for iter in 0..analysis.num_iterations {
+                    let new_prefix = format!("{}-{:0>3}_{}", name, iter, name);
+                    mc_data.push(self.parse_analysis(&new_prefix, i, &analysis.analyses)?);
+                }
+                data.push(mc_data);
+            }
+            Ok(AnalysisData::MonteCarlo(MonteCarloData { data }))
+        } else {
         // Spectre chooses this file name by default
         let file_name = match analysis.analysis_type() {
             AnalysisType::Ac => {
-                format!("{}.ac", analysis_name(BASE_ANALYSIS_PREFIX, num))
+                format!("{}.ac", name)
             }
             AnalysisType::Tran => {
-                format!("{}.tran.tran", analysis_name(BASE_ANALYSIS_PREFIX, num))
+                format!("{}.tran.tran", name)
             }
             AnalysisType::Dc | AnalysisType::Op => {
-                format!("{}.dc", analysis_name(BASE_ANALYSIS_PREFIX, num))
+                format!("{}.dc", name)
             }
-            AnalysisType::MonteCarlo => { return Ok(AnalysisData::MonteCarlo(MonteCarloData { data: Vec::new() } )); }
             _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
         };
         let psf_path = self.raw_output_dir.join(file_name);
@@ -140,13 +151,14 @@ impl<'a> SpectreOutputParser<'a> {
             AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
             _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
         })
+        }
     }
 
     fn parse_analyses(mut self, input: &SimInput) -> Result<Vec<AnalysisData>> {
         let mut analyses = Vec::new();
         if output_format_name(&input.output_format) == "psfascii" {
             for i in 0..input.analyses.len() {
-                let analysis = self.parse_analysis(i, input)?;
+                let analysis = self.parse_analysis(BASE_ANALYSIS_PREFIX, i, &input.analyses)?;
                 analyses.push(analysis);
             }
         }

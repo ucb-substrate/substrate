@@ -141,7 +141,9 @@ pub struct DcData {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MonteCarloData {
     /// All saved analyses.
-    pub data: Vec<AnalysisData>,
+    ///
+    /// First index represents nested analyses and second index represents Monte Carlo iterations.
+    pub data: Vec<Vec<AnalysisData>>,
 }
 
 #[derive(Debug, Clone, Builder, PartialEq, Serialize, Deserialize)]
