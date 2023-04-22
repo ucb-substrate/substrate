@@ -24,6 +24,8 @@ new_key_type! {
     pub struct TimingSignalKey;
 }
 
+#[derive(Debug, Clone, PartialEq, Builder, Serialize, Deserialize)]
+#[builder(build_fn(validate = "Self::validate"))]
 pub struct TimingConfig {
     /// The scale for PDK-provided timing information.
     ///
@@ -40,7 +42,26 @@ pub struct TimingConfig {
     slew_thresholds: [f64; 2],
 }
 
+impl TimingConfigBuilder {
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(ref thresh) = self.slew_thresholds {
+            if thresh[0] >= thresh[1] {
+                return Err(format!(
+                    "Upper slew threshold `{:.4}` must be larger than lower slew threshold `{:.4}`",
+                    thresh[1], thresh[0]
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 impl TimingConfig {
+    #[inline]
+    pub fn builder() -> TimingConfigBuilder {
+        TimingConfigBuilder::default()
+    }
+
     #[inline]
     pub fn slew_lower_thresh(&self) -> f64 {
         self.slew_thresholds[0]

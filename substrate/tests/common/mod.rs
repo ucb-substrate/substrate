@@ -8,6 +8,7 @@ use substrate::data::{SubstrateConfig, SubstrateCtx};
 use substrate::pdk::PdkParams;
 use substrate::schematic::netlist::impls::spice::SpiceNetlister;
 use substrate::verification::simulation::{Simulator, SimulatorOpts};
+use substrate::verification::timing::TimingConfig;
 
 pub mod common_source;
 pub mod sp_cell;
@@ -34,9 +35,16 @@ pub fn setup_ctx() -> SubstrateCtx {
     let simulator = Ngspice::new(SimulatorOpts::default()).unwrap();
     let pdk_root = std::env::var("SKY130_OPEN_PDK_ROOT").expect("the SKY130_OPEN_PDK_ROOT environment variable should be set to the root of the skywater-pdk repository").into();
 
+    let timing_config = TimingConfig::builder()
+        .time_unit(substrate::units::SiPrefix::Nano)
+        .slew_thresholds([0.2, 0.8])
+        .build()
+        .unwrap();
+
     let cfg = SubstrateConfig::builder()
         .netlister(SpiceNetlister::new())
         .simulator(simulator)
+        .timing_config(timing_config)
         .pdk(Sky130OpenPdk::new(&PdkParams { pdk_root }).unwrap())
         .build();
     SubstrateCtx::from_config(cfg).unwrap()
