@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use approx::abs_diff_eq;
+use statrs::statistics::Statistics;
 use substrate::verification::simulation::{
-    AcAnalysis, Analysis, AnalysisType, SimInput, Simulator, SimulatorOpts, SweepMode, TranAnalysis,
+    AcAnalysis, Analysis, AnalysisType, MonteCarloAnalysis, OpAnalysis, SimInput, Simulator,
+    SimulatorOpts, SweepMode, TranAnalysis, Variations,
 };
 
 use crate::Spectre;
@@ -13,7 +15,7 @@ pub(crate) const EXAMPLES_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/exa
 #[test]
 #[ignore = "requires Spectre"]
 fn vdivider_test() {
-    let path = PathBuf::from(EXAMPLES_PATH).join("vdivider_tb.spice");
+    let path = PathBuf::from(EXAMPLES_PATH).join("vdivider_tb.scs");
     let work_dir = PathBuf::from(TEST_BUILD_PATH).join("vdivider_tb/sim/");
     let input = SimInput {
         work_dir,
@@ -57,6 +59,15 @@ fn vdivider_test() {
                     .build()
                     .unwrap(),
             ),
+            Analysis::MonteCarlo(
+                MonteCarloAnalysis::builder()
+                    .variations(Variations::Mismatch)
+                    .num_iterations(200)
+                    .seed(1234)
+                    .analyses(vec![Analysis::Op(OpAnalysis::new())])
+                    .build()
+                    .unwrap(),
+            ),
         ],
         includes: vec![path],
         ..Default::default()
@@ -69,7 +80,7 @@ fn vdivider_test() {
     let out = simulator.simulate(input).unwrap();
     println!("{out:?}");
 
-    assert_eq!(out.data.len(), 5);
+    assert_eq!(out.data.len(), 6);
 
     assert_eq!(out.data[0].analysis_type(), AnalysisType::Tran);
     let out_time = &out.data[0].tran().time;
@@ -99,4 +110,20 @@ fn vdivider_test() {
         out_time.get(out_time.len() - 1).unwrap(),
         10e-3f64
     ));
+
+    assert_eq!(out.data[5].analysis_type(), AnalysisType::MonteCarlo);
+    let out_data = &out.data[5].monte_carlo().data;
+    assert_eq!(out_data.len(), 1);
+    let op_data = &out_data[0];
+    assert_eq!(op_data.len(), 200);
+    let vout: Vec<f64> = op_data
+        .iter()
+        .map(|analysis| analysis.op().data.get("Xdut.out").unwrap().value)
+        .collect();
+    let vout_avg = (&vout).mean();
+    let vout_stddev = (&vout).std_dev();
+    println!("avg: {:?}", vout_avg);
+    println!("stddev: {:?}", vout_stddev);
+    assert!(abs_diff_eq!(vout_avg, 0.6, epsilon = 0.004));
+    assert!(abs_diff_eq!(vout_stddev, 0.08, epsilon = 0.002));
 }

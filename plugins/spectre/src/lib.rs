@@ -6,17 +6,20 @@ use std::process::Command;
 
 use anyhow::{bail, Result};
 use lazy_static::lazy_static;
-use psf_ascii::parser::ac::AcData as PsfAcData;
-use psf_ascii::parser::transient::TransientData;
+use psf_ascii::parser::analysis::ac::AcData as PsfAcData;
+use psf_ascii::parser::analysis::dc::DcData as PsfDcData;
+use psf_ascii::parser::analysis::transient::TransientData;
 use serde::Serialize;
 use substrate::verification::simulation::{
-    AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, OutputFormat, Quantity,
-    RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts, SweepMode, TranData,
+    AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, MonteCarloData, OpData,
+    OutputFormat, Quantity, RealSignal, Save, ScalarSignal, SimInput, SimOutput, Simulator,
+    SimulatorOpts, SweepMode, TranData, Variations,
 };
 use templates::{render_netlist, NetlistCtx};
 use tera::{Context, Tera};
 
 pub const TOP_NETLIST_NAME: &str = "sim.top.spice";
+pub const BASE_ANALYSIS_PREFIX: &str = "analysis";
 
 lazy_static! {
     pub static ref TEMPLATES: Tera =
@@ -61,6 +64,49 @@ fn ac_conv(parsed_data: PsfAcData) -> AcData {
     }
 }
 
+fn dc_conv(parsed_data: PsfDcData) -> DcData {
+    DcData {
+        data: match parsed_data {
+            PsfDcData::Sweep(data) => HashMap::from_iter(
+                data.signals
+                    .into_iter()
+                    .chain([data.param].into_iter())
+                    .map(|(k, v)| {
+                        (
+                            k,
+                            RealSignal {
+                                values: v,
+                                quantity: Quantity::Unknown,
+                            },
+                        )
+                    }),
+            ),
+            PsfDcData::Op(_) => panic!("expected dc sweep, found an op analysis"),
+        },
+    }
+}
+
+fn op_conv(parsed_data: PsfDcData) -> OpData {
+    OpData {
+        data: match parsed_data {
+            PsfDcData::Op(data) => HashMap::from_iter(data.signals.into_iter().map(|(k, v)| {
+                (
+                    k,
+                    ScalarSignal {
+                        value: v,
+                        quantity: Quantity::Unknown,
+                    },
+                )
+            })),
+            PsfDcData::Sweep(_) => panic!("expected op analysis, found a dc sweep"),
+        },
+    }
+}
+
+fn analysis_name(prefix: &str, num: usize) -> String {
+    format!("{prefix}_{num}")
+}
+
 pub(crate) mod templates;
 #[cfg(test)]
 mod tests;
@@ -76,37 +122,58 @@ impl<'a> SpectreOutputParser<'a> {
         Self { raw_output_dir }
     }
 
-    fn parse_analysis(&mut self, num: usize, input: &SimInput) -> Result<AnalysisData> {
-        let analyses = &input.analyses;
+    fn parse_analysis(
+        &mut self,
+        prefix: &str,
+        num: usize,
+        analyses: &[Analysis],
+    ) -> Result<AnalysisData> {
         let analysis = &analyses[num];
+        let name = analysis_name(prefix, num);
 
-        // Spectre chooses this file name by default
-        let file_name = match analysis.analysis_type() {
-            AnalysisType::Ac => {
-                format!("analysis{num}.ac")
+        if let Analysis::MonteCarlo(analysis) = analysis {
+            let mut data = Vec::new();
+            for i in 0..analysis.analyses.len() {
+                let mut mc_data = Vec::new();
+                for iter in 1..analysis.num_iterations + 1 {
+                    let new_prefix = format!("{}-{:0>3}_{}", name, iter, name);
+                    mc_data.push(self.parse_analysis(&new_prefix, i, &analysis.analyses)?);
+                }
+                data.push(mc_data);
             }
-            AnalysisType::Tran => {
-                format!("analysis{num}.tran.tran")
-            }
-            _ => {
-                bail!("spectre plugin only supports ac and transient simulations");
-            }
-        };
-        let psf_path = self.raw_output_dir.join(file_name);
-        let psf = substrate::io::read_to_string(psf_path)?;
-        let ast = psf_ascii::parser::frontend::parse(&psf)?;
-        Ok(match analysis.analysis_type() {
-            AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
-            AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
-            _ => bail!("spectre plugin only supports ac and transient simulations"),
-        })
+            Ok(AnalysisData::MonteCarlo(MonteCarloData { data }))
+        } else {
+            // Spectre chooses this file name by default
+            let file_name = match analysis.analysis_type() {
+                AnalysisType::Ac => {
+                    format!("{}.ac", name)
+                }
+                AnalysisType::Tran => {
+                    format!("{}.tran.tran", name)
+                }
+                AnalysisType::Dc | AnalysisType::Op => {
+                    format!("{}.dc", name)
+                }
+                _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
+            };
+            let psf_path = self.raw_output_dir.join(file_name);
+            let psf = substrate::io::read_to_string(psf_path)?;
+            let ast = psf_ascii::parser::frontend::parse(&psf)?;
+            Ok(match analysis.analysis_type() {
+                AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
+                AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
+                AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
+                AnalysisType::Op => op_conv(PsfDcData::from_ast(&ast)).into(),
+                _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
+            })
+        }
     }
 
     fn parse_analyses(mut self, input: &SimInput) -> Result<Vec<AnalysisData>> {
         let mut analyses = Vec::new();
         if output_format_name(&input.output_format) == "psfascii" {
             for i in 0..input.analyses.len() {
-                let analysis = self.parse_analysis(i, input)?;
+                let analysis = self.parse_analysis(BASE_ANALYSIS_PREFIX, i, &input.analyses)?;
                 analyses.push(analysis);
             }
         }
@@ -177,7 +244,7 @@ pub fn run_spectre(input: &SimInput) -> Result<Vec<AnalysisData>> {
     let paths = generate_paths(work_dir);
 
     std::fs::create_dir_all(&input.work_dir)?;
-    let analyses = get_analyses(&input.analyses);
+    let analyses = get_analyses(&input.analyses)?;
 
     let mut spectre_directives = vec!["oppreserveall options preserve_inst=all".to_string()];
     save_directives(input, &mut spectre_directives);
@@ -298,17 +365,18 @@ impl Simulator for Spectre {
     }
 }
 
-fn get_analyses(input: &[Analysis]) -> Vec<String> {
+fn get_analyses(input: &[Analysis]) -> Result<Vec<String>> {
     input
         .iter()
         .enumerate()
-        .map(|(i, analysis)| analysis_line(analysis, i))
+        .map(|(i, analysis)| analysis_line(analysis, BASE_ANALYSIS_PREFIX, i))
         .collect()
 }
 
-fn analysis_line(input: &Analysis, num: usize) -> String {
-    match input {
-        Analysis::Op(_) => format!("analysis{num} dc"),
+fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
+    let name = analysis_name(prefix, num);
+    Ok(match input {
+        Analysis::Op(_) => format!("{name} dc"),
         Analysis::Tran(a) => {
             let strobe = if let Some(strobe) = a.strobe_period {
                 format!(" strobeperiod={strobe}")
@@ -316,21 +384,65 @@ fn analysis_line(input: &Analysis, num: usize) -> String {
                 String::new()
             };
             format!(
-                "analysis{num} tran step={} stop={} start={}{}",
+                "{name} tran step={} stop={} start={}{}",
                 a.step, a.stop, a.start, strobe
             )
         }
         Analysis::Ac(a) => format!(
-            "analysis{num} ac start={} stop={} {}",
+            "{name} ac start={} stop={} {}",
             a.fstart,
             a.fstop,
             fmt_sweep_mode(a.sweep, a.points),
         ),
         Analysis::Dc(a) => format!(
-            "analysis{num} dc {} start={} stop={} step={}",
+            "{name} dc {} start={} stop={} step={}",
             a.sweep, a.start, a.stop, a.step
         ),
-    }
+        Analysis::MonteCarlo(a) => {
+            let mut monte_carlo = format!("{name} montecarlo");
+            monte_carlo.push_str(&format!(
+                " variations={}",
+                match a.variations {
+                    Variations::Process => {
+                        "process"
+                    }
+                    Variations::Mismatch => {
+                        "mismatch"
+                    }
+                    Variations::All => {
+                        "all"
+                    }
+                }
+            ));
+            monte_carlo.push_str(&format!(" numruns={}", a.num_iterations));
+            if let Some(seed) = a.seed {
+                monte_carlo.push_str(&format!(" seed={}", seed));
+            }
+            if let Some(first_run) = a.first_run {
+                monte_carlo.push_str(&format!(" firstrun={}", first_run));
+            }
+
+            monte_carlo.push_str(" savefamilyplots=yes {\n\t");
+
+            let analysis_lines = a
+                .analyses
+                .iter()
+                .enumerate()
+                .map(|(i, analysis)| {
+                    if let Analysis::MonteCarlo(_) = analysis {
+                        bail!("spectre plugin does not support nested Monte Carlo simulations");
+                    } else {
+                        analysis_line(analysis, &name, i)
+                    }
+                })
+                .collect::<Result<Vec<String>>>()?;
+
+            monte_carlo.push_str(&analysis_lines.join("\n\t"));
+            monte_carlo.push_str("\n}");
+
+            monte_carlo
+        }
+    })
 }
 
 fn fmt_sweep_mode(mode: SweepMode, points: usize) -> String {

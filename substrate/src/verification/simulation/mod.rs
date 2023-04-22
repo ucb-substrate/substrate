@@ -90,6 +90,7 @@ pub enum Analysis {
     Dc(DcAnalysis),
     Tran(TranAnalysis),
     Ac(AcAnalysis),
+    MonteCarlo(MonteCarloAnalysis),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -98,6 +99,7 @@ pub enum AnalysisType {
     Dc,
     Tran,
     Ac,
+    MonteCarlo,
     Other,
 }
 
@@ -135,6 +137,14 @@ pub struct AcData {
 pub struct DcData {
     /// All saved signals.
     pub data: HashMap<String, RealSignal>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MonteCarloData {
+    /// All saved analyses.
+    ///
+    /// First index represents nested analyses and second index represents Monte Carlo iterations.
+    pub data: Vec<Vec<AnalysisData>>,
 }
 
 #[derive(Debug, Clone, Builder, PartialEq, Serialize, Deserialize)]
@@ -186,6 +196,32 @@ impl AcAnalysis {
     }
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Variations {
+    #[default]
+    Process,
+    Mismatch,
+    All,
+}
+
+#[derive(Debug, Clone, Builder, PartialEq, Serialize, Deserialize)]
+pub struct MonteCarloAnalysis {
+    pub variations: Variations,
+    pub num_iterations: usize,
+    #[builder(default, setter(strip_option))]
+    pub seed: Option<u64>,
+    #[builder(default, setter(strip_option))]
+    pub first_run: Option<usize>,
+    pub analyses: Vec<Analysis>,
+}
+
+impl MonteCarloAnalysis {
+    #[inline]
+    pub fn builder() -> MonteCarloAnalysisBuilder {
+        MonteCarloAnalysisBuilder::default()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScalarSignal {
     pub value: f64,
@@ -228,6 +264,7 @@ pub enum AnalysisData {
     Tran(TranData),
     Ac(AcData),
     Dc(DcData),
+    MonteCarlo(MonteCarloData),
     Other,
 }
 
@@ -238,6 +275,7 @@ impl AnalysisData {
             Self::Tran(_) => AnalysisType::Tran,
             Self::Ac(_) => AnalysisType::Ac,
             Self::Dc(_) => AnalysisType::Dc,
+            Self::MonteCarlo(_) => AnalysisType::MonteCarlo,
             Self::Other => AnalysisType::Other,
         }
     }
@@ -289,6 +327,18 @@ impl AnalysisData {
             _ => panic!("Expected dc analysis, got {:?}", self.analysis_type()),
         }
     }
+
+    /// Get the results of a Monte Carlo analysis.
+    ///
+    /// # Panics
+    ///
+    /// This function panics if this analysis does not correspond to a DC analysis.
+    pub fn monte_carlo(&self) -> &MonteCarloData {
+        match self {
+            Self::MonteCarlo(x) => x,
+            _ => panic!("Expected dc analysis, got {:?}", self.analysis_type()),
+        }
+    }
 }
 
 impl From<OpData> for AnalysisData {
@@ -309,6 +359,11 @@ impl From<AcData> for AnalysisData {
 impl From<DcData> for AnalysisData {
     fn from(value: DcData) -> Self {
         Self::Dc(value)
+    }
+}
+impl From<MonteCarloData> for AnalysisData {
+    fn from(value: MonteCarloData) -> Self {
+        Self::MonteCarlo(value)
     }
 }
 
@@ -332,6 +387,7 @@ impl Analysis {
             Analysis::Tran(_) => AnalysisType::Tran,
             Analysis::Ac(_) => AnalysisType::Ac,
             Analysis::Dc(_) => AnalysisType::Dc,
+            Analysis::MonteCarlo(_) => AnalysisType::MonteCarlo,
         }
     }
 }
@@ -357,6 +413,12 @@ impl From<DcAnalysis> for Analysis {
 impl From<AcAnalysis> for Analysis {
     fn from(value: AcAnalysis) -> Self {
         Self::Ac(value)
+    }
+}
+
+impl From<MonteCarloAnalysis> for Analysis {
+    fn from(value: MonteCarloAnalysis) -> Self {
+        Self::MonteCarlo(value)
     }
 }
 

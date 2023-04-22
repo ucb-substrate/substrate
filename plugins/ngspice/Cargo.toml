@@ -11,3 +11,4 @@ serde = { version = "1.0.159", features = ["derive"] }
 substrate = { path = "../../substrate" }
 tera = "1.18.1"
 spice_rawfile = { path = "../spice_rawfile" }
+anyhow = "1.0.70"
