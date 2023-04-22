@@ -204,8 +204,7 @@ pub enum Variations {
 #[derive(Debug, Clone, Builder, PartialEq, Serialize, Deserialize)]
 pub struct MonteCarloAnalysis {
     pub variations: Variations,
-    #[builder(default, setter(strip_option))]
-    pub num_iterations: Option<usize>,
+    pub num_iterations: usize,
     #[builder(default, setter(strip_option))]
     pub seed: Option<u64>,
     #[builder(default, setter(strip_option))]

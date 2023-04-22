@@ -13,12 +13,13 @@ use serde::Serialize;
 use substrate::verification::simulation::{
     AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, OutputFormat, Quantity,
     RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts, SweepMode, TranData,
-    Variations,
+    MonteCarloAnalysis, Variations, OpAnalysis, MonteCarloData
 };
 use templates::{render_netlist, NetlistCtx};
 use tera::{Context, Tera};
 
 pub const TOP_NETLIST_NAME: &str = "sim.top.spice";
+pub const BASE_ANALYSIS_PREFIX: &str = "analysis";
 
 lazy_static! {
     pub static ref TEMPLATES: Tera =
@@ -93,6 +94,10 @@ fn dc_conv(parsed_data: PsfDcData) -> DcData {
     }
 }
 
+fn analysis_name(prefix: &str, num: usize) -> String {
+    format!("{prefix}_{num}")
+}
+
 pub(crate) mod templates;
 #[cfg(test)]
 mod tests;
@@ -115,17 +120,16 @@ impl<'a> SpectreOutputParser<'a> {
         // Spectre chooses this file name by default
         let file_name = match analysis.analysis_type() {
             AnalysisType::Ac => {
-                format!("analysis{num}.ac")
+                format!("{}.ac", analysis_name(BASE_ANALYSIS_PREFIX, num))
             }
             AnalysisType::Tran => {
-                format!("analysis{num}.tran.tran")
+                format!("{}.tran.tran", analysis_name(BASE_ANALYSIS_PREFIX, num))
             }
             AnalysisType::Dc | AnalysisType::Op => {
-                format!("analysis{num}.dc")
+                format!("{}.dc", analysis_name(BASE_ANALYSIS_PREFIX, num))
             }
-            _ => {
-                bail!("spectre plugin only supports ac and transient simulations");
-            }
+            AnalysisType::MonteCarlo => { return Ok(AnalysisData::MonteCarlo(MonteCarloData { data: Vec::new() } )); }
+            _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
         };
         let psf_path = self.raw_output_dir.join(file_name);
         let psf = substrate::io::read_to_string(psf_path)?;
@@ -134,7 +138,7 @@ impl<'a> SpectreOutputParser<'a> {
             AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
             AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
             AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
-            _ => bail!("spectre plugin only supports ac and transient simulations"),
+            _ => bail!("spectre plugin only supports transient, ac, and dc simulations")
         })
     }
 
@@ -320,12 +324,12 @@ fn get_analyses(input: &[Analysis]) -> Result<Vec<String>> {
     input
         .iter()
         .enumerate()
-        .map(|(i, analysis)| analysis_line(analysis, "analysis", i))
+        .map(|(i, analysis)| analysis_line(analysis, BASE_ANALYSIS_PREFIX, i))
         .collect()
 }
 
 fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
-    let name = format!("{prefix}_{num}");
+    let name = analysis_name(prefix, num);
     Ok(match input {
         Analysis::Op(_) => format!("{name} dc"),
         Analysis::Tran(a) => {
@@ -365,9 +369,7 @@ fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
                     }
                 }
             ));
-            if let Some(num_iterations) = a.num_iterations {
-                monte_carlo.push_str(&format!(" numruns={}", num_iterations));
-            }
+            monte_carlo.push_str(&format!(" numruns={}", a.num_iterations));
             if let Some(seed) = a.seed {
                 monte_carlo.push_str(&format!(" seed={}", seed));
             }

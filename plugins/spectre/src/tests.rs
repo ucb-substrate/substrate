@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use approx::abs_diff_eq;
 use substrate::verification::simulation::{
     AcAnalysis, Analysis, AnalysisType, SimInput, Simulator, SimulatorOpts, SweepMode, TranAnalysis,
+    OpAnalysis, MonteCarloAnalysis, Variations, 
 };
 
 use crate::Spectre;
@@ -13,7 +14,7 @@ pub(crate) const EXAMPLES_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/exa
 #[test]
 #[ignore = "requires Spectre"]
 fn vdivider_test() {
-    let path = PathBuf::from(EXAMPLES_PATH).join("vdivider_tb.spice");
+    let path = PathBuf::from(EXAMPLES_PATH).join("vdivider_tb.scs");
     let work_dir = PathBuf::from(TEST_BUILD_PATH).join("vdivider_tb/sim/");
     let input = SimInput {
         work_dir,
@@ -57,6 +58,17 @@ fn vdivider_test() {
                     .build()
                     .unwrap(),
             ),
+            Analysis::MonteCarlo(
+                MonteCarloAnalysis::builder()
+                    .variations(Variations::Mismatch)
+                    .num_iterations(5)
+                    .seed(1234)
+                    .analyses(vec![
+                        Analysis::Op(OpAnalysis::new())
+                    ])
+                    .build()
+                    .unwrap(),
+            ),
         ],
         includes: vec![path],
         ..Default::default()
@@ -69,7 +81,7 @@ fn vdivider_test() {
     let out = simulator.simulate(input).unwrap();
     println!("{out:?}");
 
-    assert_eq!(out.data.len(), 5);
+    assert_eq!(out.data.len(), 6);
 
     assert_eq!(out.data[0].analysis_type(), AnalysisType::Tran);
     let out_time = &out.data[0].tran().time;
