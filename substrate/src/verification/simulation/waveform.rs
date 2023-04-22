@@ -159,7 +159,7 @@ impl TimeWaveform for Waveform {
 
 impl<'a> TimeWaveform for SharedWaveform<'a> {
     fn get(&self, idx: usize) -> Option<TimePoint> {
-        if idx > self.len() {
+        if idx >= self.len() {
             return None;
         }
         Some(TimePoint::new(self.t[idx], self.x[idx]))

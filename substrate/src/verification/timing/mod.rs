@@ -4,11 +4,11 @@ use std::ops::{Deref, DerefMut};
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, SlotMap};
-
 use sublut::{FloatLut1, FloatLut2};
 
 use super::simulation::waveform::{EdgeDir, SharedWaveform, TimeWaveform};
 use super::simulation::{Simulator, TranData};
+use crate::log::Log;
 use crate::pdk::corner::Pvt;
 use crate::schematic::circuit::{InstanceKey, Reference};
 use crate::schematic::context::ModuleKey;
@@ -184,8 +184,22 @@ impl TimingView {
 
 impl TimingReport {
     #[inline]
-    pub fn builder() -> TimingReportBuilder {
+    pub(crate) fn builder() -> TimingReportBuilder {
         TimingReportBuilder::default()
+    }
+
+    pub fn is_failure(&self) -> bool {
+        let setup_fail = self
+            .setup_checks
+            .get(0)
+            .map(|c| c.slack < 0.0)
+            .unwrap_or_default();
+        let hold_fail = self
+            .hold_checks
+            .get(0)
+            .map(|c| c.slack < 0.0)
+            .unwrap_or_default();
+        setup_fail || hold_fail
     }
 }
 
@@ -208,6 +222,34 @@ impl TimingReportBuilder {
         TimingReport {
             setup_checks: self.setup_checks.into_iter().map(|m| m.0).collect(),
             hold_checks: self.hold_checks.into_iter().map(|m| m.0).collect(),
+        }
+    }
+}
+
+impl Log for TimingReport {
+    fn log(&self) {
+        use crate::log::*;
+
+        if self.is_failure() {
+            error!("Timing constraints not satisfied");
+            for c in self.setup_checks.iter() {
+                if c.slack < 0.0 {
+                    error!("Setup check failed: {:?}", c);
+                }
+            }
+            for c in self.hold_checks.iter() {
+                if c.slack < 0.0 {
+                    error!("Hold check failed: {:?}", c);
+                }
+            }
+        } else {
+            info!("All timing constraints satisfied");
+            if let Some(c) = self.setup_checks.get(0) {
+                info!("Minimum setup slack: {:?}", c);
+            }
+            if let Some(c) = self.hold_checks.get(0) {
+                info!("Minimum hold slack: {:?}", c);
+            }
         }
     }
 }
@@ -262,7 +304,6 @@ impl SetupHoldConstraint {
 impl PreprocessedNetlist {
     /// Returns a list of the nodes that need to be captured by the simulator.
     pub(crate) fn timing_constraint_db(&self, pvt: &Pvt) -> TopConstraintDb {
-        let module = &self.modules[self.top];
         let mut stack = Vec::new();
         let mut out = Vec::new();
         self.timing_helper(self.top, pvt, &mut stack, &mut out);
@@ -290,7 +331,9 @@ impl PreprocessedNetlist {
                 TimingConstraint::SetupHold(c) => TopConstraint {
                     constraint,
                     port: self.simplify_path(SignalPathBuf::new(stack.clone(), c.port)),
-                    related_port: None,
+                    related_port: Some(
+                        self.simplify_path(SignalPathBuf::new(stack.clone(), c.related_port)),
+                    ),
                 },
                 _ => todo!(),
             };
@@ -339,10 +382,14 @@ impl<'a> TopConstraintDb<'a> {
         let named_constraints = self
             .constraints
             .iter()
-            .map(|c| NamedTopConstraint {
-                constraint: c.constraint,
-                port: netlist.to_named_path(&c.port),
-                related_port: c.related_port.as_ref().map(|p| netlist.to_named_path(p)),
+            .map(|c| {
+                let port = netlist.to_named_path(&c.port);
+                let related_port = c.related_port.as_ref().map(|p| netlist.to_named_path(p));
+                NamedTopConstraint {
+                    constraint: c.constraint,
+                    port,
+                    related_port,
+                }
             })
             .collect();
         self.named_constraints = Some(named_constraints);
@@ -383,7 +430,7 @@ pub(crate) fn verify_setup_hold_constraint(
                     |tr| tr.start_time().total_cmp(&t).into(),
                     SearchSide::Before,
                 ) {
-                    // convert to nanoseconds
+                    // Convert to nanoseconds.
                     let idx1 = tr.duration() * 1e9;
                     let idx2 = clk_edge.duration() * 1e9;
                     // TODO handle extrapolation and add warning
@@ -392,6 +439,9 @@ pub(crate) fn verify_setup_hold_constraint(
                     } else {
                         constraint.fall.getf(idx1, idx2).unwrap()
                     };
+
+                    // Convert from nanoseconds to seconds.
+                    let tsu = tsu / 1e9;
 
                     let slack = t - tr.end_time() - tsu;
                     report.add_setup_check(slack, || TimingCheck {
@@ -409,7 +459,7 @@ pub(crate) fn verify_setup_hold_constraint(
                     SearchSide::After,
                 ) {
                     // check edge.t() - t > t_hold
-                    // convert to nanoseconds
+                    // Convert to nanoseconds.
                     let idx1 = tr.duration() * 1e9;
                     let idx2 = clk_edge.duration() * 1e9;
                     // TODO handle extrapolation and add warning
@@ -418,6 +468,10 @@ pub(crate) fn verify_setup_hold_constraint(
                     } else {
                         constraint.fall.getf(idx1, idx2).unwrap()
                     };
+
+                    // Convert from nanoseconds to seconds.
+                    let t_hold = t_hold / 1e9;
+
                     let slack = tr.start_time() - t - t_hold;
                     report.add_hold_check(slack, || TimingCheck {
                         slack,
@@ -440,13 +494,16 @@ pub(crate) fn generate_timing_report<'a>(
     for constraint in constraints {
         match constraint.constraint {
             TimingConstraint::SetupHold(c) => {
-                let related_port_name = constraint.related_port.as_ref().unwrap();
+                let port = &simulator.node_voltage_string(&constraint.port);
                 let port = data
-                    .waveform(&simulator.node_voltage_string(&constraint.port))
-                    .unwrap();
+                    .waveform(port)
+                    .unwrap_or_else(|| panic!("waveform not found: {port}"));
+
+                let related_port_name = constraint.related_port.as_ref().unwrap();
+                let related_port = &simulator.node_voltage_string(&related_port_name);
                 let related_port = data
-                    .waveform(&simulator.node_voltage_string(&related_port_name))
-                    .unwrap();
+                    .waveform(related_port)
+                    .unwrap_or_else(|| panic!("waveform not found: {related_port}"));
                 verify_setup_hold_constraint(
                     c,
                     port,

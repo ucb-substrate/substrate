@@ -166,15 +166,16 @@ impl PreprocessedNetlist {
         let mut slice = path.slice;
         for i in modules.len() - 1..=0 {
             let module = &self.modules[modules[i]];
-            let info = &module.signals()[path.slice.signal];
+            let info = &module.signals()[slice.signal];
             if !info.is_port() {
                 path.insts.truncate(i + 1);
                 return SignalPathBuf::new(path.insts, slice);
             } else {
-                if i == 0 {
-                    break;
-                }
-                let parent = &self.modules[modules[i - 1]];
+                let parent = if i == 0 {
+                    &self.modules[self.top]
+                } else {
+                    &self.modules[modules[i - 1]]
+                };
                 let i = &parent.instance_map()[path.insts[i]];
                 let sig = &i.connections()[info.name()];
                 slice = sig.index(slice.idx).into_single();

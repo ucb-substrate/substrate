@@ -19,7 +19,7 @@ use crate::layout::cell::{Cell, CellKey, Instance as LayoutInstance};
 use crate::layout::context::{LayoutCtx, LayoutData};
 use crate::layout::layers::{Layers, LayersRef};
 use crate::layout::LayoutFormat;
-use crate::log;
+use crate::log::{self, Log};
 use crate::pdk::corner::error::ProcessCornerError;
 use crate::pdk::corner::{CornerDb, CornerEntry, Pvt};
 use crate::pdk::mos::db::MosDb;
@@ -729,7 +729,7 @@ impl SubstrateCtx {
         )
     }
 
-    fn _write_simulation<T>(
+    pub fn _write_simulation<T>(
         &self,
         params: &T::Params,
         work_dir: impl AsRef<Path>,
@@ -811,6 +811,12 @@ impl SubstrateCtx {
             let data = output.data[0].tran();
             let report =
                 generate_timing_report(constraints.named_constraints(&netlist), data, &*simulator);
+
+            report.log();
+            if report.is_failure() {
+                return Err(ErrorSource::TimingFailed(report).into());
+            }
+
             output
         } else {
             simulator.simulate(ctx.into_inner())?

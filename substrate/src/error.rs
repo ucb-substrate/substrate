@@ -15,12 +15,19 @@ use crate::pdk::stdcell::error::StdCellError;
 use crate::schematic::circuit::PortError as SchematicPortError;
 use crate::schematic::netlist::interface::NetlistError;
 use crate::verification::simulation::bits::BitConvError;
+use crate::verification::timing::TimingReport;
 
 pub type Result<T> = std::result::Result<T, SubstrateError>;
 
 pub struct SubstrateError {
     pub(crate) source: ErrorSource,
     pub(crate) context: Vec<ErrorContext>,
+}
+
+impl SubstrateError {
+    pub fn source(&self) -> &ErrorSource {
+        &self.source
+    }
 }
 
 impl std::error::Error for SubstrateError {
@@ -229,6 +236,9 @@ pub enum ErrorSource {
 
     #[error("error converting signal to logic level: {0}")]
     BitConv(#[from] BitConvError),
+
+    #[error("timing constraints not satisfied; see report for more details")]
+    TimingFailed(TimingReport),
 
     #[error("unexpected error: {0}")]
     Other(#[from] Box<dyn std::error::Error + Send + Sync>),

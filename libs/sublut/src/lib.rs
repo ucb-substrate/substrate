@@ -70,8 +70,9 @@ pub type FloatLut2 = Lut2<f64, f64, f64>;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use float_eq::float_eq;
+
+    use super::*;
 
     #[test]
     fn test_lut_u64() {
