@@ -287,7 +287,7 @@ impl Simulator for Spectre {
 
         let mut s = String::new();
         for inst in path.insts.iter() {
-            s.push_str(&inst);
+            s.push_str(inst);
             s.push('.');
         }
         s.push_str(&path.signal);

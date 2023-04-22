@@ -1,4 +1,4 @@
-use super::{TimingConstraint, TimingView};
+use super::TimingConstraint;
 use crate::data::SubstrateCtx;
 use crate::schematic::circuit::PortError;
 use crate::schematic::module::Module;

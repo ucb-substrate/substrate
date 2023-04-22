@@ -47,13 +47,13 @@ where
     search_in_range(lst, predicate, side, 0, lst.len() - 1)
 }
 
-pub fn search_in_range<'a, V, P>(
-    lst: &'a V,
+pub fn search_in_range<V, P>(
+    lst: &V,
     mut predicate: P,
     side: SearchSide,
     mut lo: usize,
     mut hi: usize,
-) -> Option<(usize, &'a V::Output)>
+) -> Option<(usize, &V::Output)>
 where
     V: Index<usize> + ?Sized,
     P: FnMut(&V::Output) -> SearchRange,

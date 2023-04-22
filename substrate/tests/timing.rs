@@ -14,7 +14,7 @@ use substrate::schematic::elements::vpwl::Vpwl;
 use substrate::units::{SiPrefix, SiValue};
 use substrate::verification::simulation::testbench::Testbench;
 use substrate::verification::simulation::waveform::{EdgeDir, Waveform};
-use substrate::verification::simulation::{Save, TranAnalysis};
+use substrate::verification::simulation::TranAnalysis;
 use substrate::verification::timing::{ConstraintKind, SetupHoldConstraint};
 
 mod common;
@@ -121,7 +121,7 @@ impl Component for RegTb {
 
     fn new(
         params: &Self::Params,
-        ctx: &substrate::data::SubstrateCtx,
+        _ctx: &substrate::data::SubstrateCtx,
     ) -> substrate::error::Result<Self> {
         Ok(params.clone())
     }
@@ -181,7 +181,7 @@ impl Testbench for RegTb {
 
     fn measure(
         &mut self,
-        ctx: &substrate::verification::simulation::context::PostSimCtx,
+        _ctx: &substrate::verification::simulation::context::PostSimCtx,
     ) -> substrate::error::Result<Self::Output> {
         Ok(())
     }

@@ -63,7 +63,7 @@ impl Simulator for Ngspice {
         let mut s = String::new();
         s.push_str("v(");
         for inst in path.insts.iter() {
-            s.push_str(&inst);
+            s.push_str(inst);
             s.push('.');
         }
         s.push_str(&path.signal);

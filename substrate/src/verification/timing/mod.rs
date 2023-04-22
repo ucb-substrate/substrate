@@ -1,9 +1,9 @@
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap};
 use std::ops::{Deref, DerefMut};
 
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
-use slotmap::{new_key_type, SlotMap};
+use slotmap::new_key_type;
 use sublut::{FloatLut1, FloatLut2};
 
 use super::simulation::waveform::{EdgeDir, SharedWaveform, TimeWaveform};
@@ -13,7 +13,7 @@ use crate::pdk::corner::Pvt;
 use crate::schematic::circuit::{InstanceKey, Reference};
 use crate::schematic::context::ModuleKey;
 use crate::schematic::netlist::preprocess::PreprocessedNetlist;
-use crate::schematic::signal::{NamedSignalPathBuf, SignalInfo, SignalPathBuf, Slice, SliceOne};
+use crate::schematic::signal::{NamedSignalPathBuf, SignalPathBuf, SliceOne};
 use crate::search::{search, SearchSide};
 
 pub mod context;
@@ -124,6 +124,38 @@ pub struct TimingCheck {
     time: f64,
     port: NamedSignalPathBuf,
     related_port: NamedSignalPathBuf,
+}
+
+impl TimingCheck {
+    #[inline]
+    pub fn slack(&self) -> f64 {
+        self.slack
+    }
+
+    /// The approximate simulation time at which this check was applied.
+    ///
+    /// Usually refers to the 50% transition point of the clock (or
+    /// other related pin), though this is subject to change in future updates.
+    #[inline]
+    pub fn time(&self) -> f64 {
+        self.time
+    }
+
+    /// The port that was constrained.
+    ///
+    /// For example, a setup time constraint on a flip flop constrains the D pin.
+    #[inline]
+    pub fn port(&self) -> &NamedSignalPathBuf {
+        &self.port
+    }
+
+    /// The port related to the constraint.
+    ///
+    /// For example, the related port for a setup time constraint on a flip flop is CLK.
+    #[inline]
+    pub fn related_port(&self) -> &NamedSignalPathBuf {
+        &self.related_port
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -314,10 +346,10 @@ impl PreprocessedNetlist {
         }
     }
 
-    fn timing_helper<'a, 'b, 'c>(
+    fn timing_helper<'a, 'c>(
         &'a self,
         module: ModuleKey,
-        pvt: &'b Pvt,
+        pvt: &Pvt,
         stack: &'c mut Vec<InstanceKey>,
         out: &'c mut Vec<IdTopConstraint<'a>>,
     ) {
@@ -375,7 +407,7 @@ impl PreprocessedNetlist {
 }
 
 impl<'a> TopConstraintDb<'a> {
-    fn compute_names<'b>(&mut self, netlist: &'b PreprocessedNetlist) {
+    fn compute_names(&mut self, netlist: &PreprocessedNetlist) {
         if self.named_constraints.is_some() {
             return;
         }
@@ -395,9 +427,9 @@ impl<'a> TopConstraintDb<'a> {
         self.named_constraints = Some(named_constraints);
     }
 
-    pub(crate) fn named_constraints<'b>(
+    pub(crate) fn named_constraints(
         &mut self,
-        netlist: &'b PreprocessedNetlist,
+        netlist: &PreprocessedNetlist,
     ) -> impl Iterator<Item = &NamedTopConstraint> {
         self.compute_names(netlist);
         self.named_constraints.as_ref().unwrap().iter()
@@ -425,7 +457,7 @@ pub(crate) fn verify_setup_hold_constraint(
         let t = clk_edge.center_time();
         match constraint.kind {
             ConstraintKind::Setup => {
-                if let Some((idx, tr)) = search(
+                if let Some((_idx, tr)) = search(
                     &transitions,
                     |tr| tr.start_time().total_cmp(&t).into(),
                     SearchSide::Before,
@@ -453,7 +485,7 @@ pub(crate) fn verify_setup_hold_constraint(
                 }
             }
             ConstraintKind::Hold => {
-                if let Some((idx, tr)) = search(
+                if let Some((_idx, tr)) = search(
                     &transitions,
                     |tr| tr.end_time().total_cmp(&t).into(),
                     SearchSide::After,
@@ -500,7 +532,7 @@ pub(crate) fn generate_timing_report<'a>(
                     .unwrap_or_else(|| panic!("waveform not found: {port}"));
 
                 let related_port_name = constraint.related_port.as_ref().unwrap();
-                let related_port = &simulator.node_voltage_string(&related_port_name);
+                let related_port = &simulator.node_voltage_string(related_port_name);
                 let related_port = data
                     .waveform(related_port)
                     .unwrap_or_else(|| panic!("waveform not found: {related_port}"));

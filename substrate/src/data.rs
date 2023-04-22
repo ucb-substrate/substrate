@@ -36,18 +36,14 @@ use crate::schematic::validation::drivers::validate_drivers;
 use crate::schematic::validation::naming::validate_naming;
 use crate::script::map::ScriptMap;
 use crate::script::Script;
-use crate::search::{search, SearchSide};
 use crate::verification::drc::{DrcInput, DrcOutput, DrcTool};
 use crate::verification::lvs::{LvsInput, LvsOutput, LvsTool};
 use crate::verification::pex::{PexInput, PexOutput, PexTool};
 use crate::verification::simulation::context::{PostSimCtx, PreSimCtx};
 use crate::verification::simulation::testbench::Testbench;
-use crate::verification::simulation::waveform::TimeWaveform;
-use crate::verification::simulation::{Save, SimInput, SimOpts, Simulator};
+use crate::verification::simulation::{SimInput, SimOpts, Simulator};
 use crate::verification::timing::context::TimingCtx;
-use crate::verification::timing::{
-    generate_timing_report, verify_setup_hold_constraint, ConstraintKind, TimingConstraint,
-};
+use crate::verification::timing::generate_timing_report;
 
 pub(crate) struct SubstrateData {
     schematics: SchematicData,

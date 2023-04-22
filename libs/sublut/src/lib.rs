@@ -33,7 +33,7 @@ where
     pub fn get(&self, k1: &K1, k2: &K2) -> Option<&V> {
         let i1 = self.k1.partition_point(|k| k < k1);
         let i2 = self.k2.partition_point(|k| k < k2);
-        Some(self.values.get(i1)?.get(i2)?)
+        self.values.get(i1)?.get(i2)
     }
 }
 
