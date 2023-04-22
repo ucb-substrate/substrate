@@ -11,9 +11,9 @@ use psf_ascii::parser::analysis::dc::DcData as PsfDcData;
 use psf_ascii::parser::analysis::transient::TransientData;
 use serde::Serialize;
 use substrate::verification::simulation::{
-    AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, MonteCarloData,
-    OutputFormat, Quantity, RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts,
-    SweepMode, TranData, Variations, OpData, ScalarSignal
+    AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, MonteCarloData, OpData,
+    OutputFormat, Quantity, RealSignal, Save, ScalarSignal, SimInput, SimOutput, Simulator,
+    SimulatorOpts, SweepMode, TranData, Variations,
 };
 use templates::{render_netlist, NetlistCtx};
 use tera::{Context, Tera};
@@ -81,7 +81,7 @@ fn dc_conv(parsed_data: PsfDcData) -> DcData {
                         )
                     }),
             ),
-            PsfDcData::Op(_) => panic!("expected dc sweep, found an op analysis")
+            PsfDcData::Op(_) => panic!("expected dc sweep, found an op analysis"),
         },
     }
 }
@@ -89,20 +89,16 @@ fn dc_conv(parsed_data: PsfDcData) -> DcData {
 fn op_conv(parsed_data: PsfDcData) -> OpData {
     OpData {
         data: match parsed_data {
-            PsfDcData::Op(data) => HashMap::from_iter(
-                data.signals
-                    .into_iter()
-                    .map(|(k, v)| {
-                        (
-                            k,
-                            ScalarSignal {
-                                value: v,
-                                quantity: Quantity::Unknown,
-                            },
-                        )
-                    }),
-            ),
-            PsfDcData::Sweep(_) => panic!("expected op analysis, found a dc sweep")
+            PsfDcData::Op(data) => HashMap::from_iter(data.signals.into_iter().map(|(k, v)| {
+                (
+                    k,
+                    ScalarSignal {
+                        value: v,
+                        quantity: Quantity::Unknown,
+                    },
+                )
+            })),
+            PsfDcData::Sweep(_) => panic!("expected op analysis, found a dc sweep"),
         },
     }
 }
