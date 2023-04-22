@@ -211,7 +211,6 @@ pub struct MonteCarloAnalysis {
     #[builder(default, setter(strip_option))]
     pub first_run: Option<usize>,
     pub analyses: Vec<Analysis>,
-    pub exports: Vec<String>,
 }
 
 impl MonteCarloAnalysis {

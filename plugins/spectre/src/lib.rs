@@ -6,11 +6,12 @@ use std::process::Command;
 
 use anyhow::{bail, Result};
 use lazy_static::lazy_static;
-use psf_ascii::parser::ac::AcData as PsfAcData;
-use psf_ascii::parser::transient::TransientData;
+use psf_ascii::parser::analysis::ac::AcData as PsfAcData;
+use psf_ascii::parser::analysis::dc::DcData as PsfDcData;
+use psf_ascii::parser::analysis::transient::TransientData;
 use serde::Serialize;
 use substrate::verification::simulation::{
-    AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, OutputFormat, Quantity,
+    AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, OutputFormat, Quantity,
     RealSignal, Save, SimInput, SimOutput, Simulator, SimulatorOpts, SweepMode, TranData,
     Variations,
 };
@@ -62,6 +63,36 @@ fn ac_conv(parsed_data: PsfAcData) -> AcData {
     }
 }
 
+fn dc_conv(parsed_data: PsfDcData) -> DcData {
+    DcData {
+        data: match parsed_data {
+            PsfDcData::Op(data) => HashMap::from_iter(data.signals.into_iter().map(|(k, v)| {
+                (
+                    k,
+                    RealSignal {
+                        values: vec![v],
+                        quantity: Quantity::Unknown,
+                    },
+                )
+            })),
+            PsfDcData::Sweep(data) => HashMap::from_iter(
+                data.signals
+                    .into_iter()
+                    .chain([data.param].into_iter())
+                    .map(|(k, v)| {
+                        (
+                            k,
+                            RealSignal {
+                                values: v,
+                                quantity: Quantity::Unknown,
+                            },
+                        )
+                    })
+            ),
+        },
+    }
+}
+
 pub(crate) mod templates;
 #[cfg(test)]
 mod tests;
@@ -89,6 +120,9 @@ impl<'a> SpectreOutputParser<'a> {
             AnalysisType::Tran => {
                 format!("analysis{num}.tran.tran")
             }
+            AnalysisType::Dc | AnalysisType::Op => {
+                format!("analysis{num}.dc")
+            }
             _ => {
                 bail!("spectre plugin only supports ac and transient simulations");
             }
@@ -99,6 +133,7 @@ impl<'a> SpectreOutputParser<'a> {
         Ok(match analysis.analysis_type() {
             AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
             AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
+            AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
             _ => bail!("spectre plugin only supports ac and transient simulations"),
         })
     }
@@ -340,7 +375,7 @@ fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
                 monte_carlo.push_str(&format!(" firstrun={}", first_run));
             }
 
-            monte_carlo.push_str(" {\n\t");
+            monte_carlo.push_str(" savefamilyplots=yes {\n\t");
 
             let analysis_lines = a
                 .analyses
@@ -356,16 +391,6 @@ fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
                 .collect::<Result<Vec<String>>>()?;
 
             monte_carlo.push_str(&analysis_lines.join("\n\t"));
-
-            // TODO: Support current nodes
-            let export_lines = a
-                .exports
-                .iter()
-                .map(|export| format!("export {export}=oceanEval(\"v(\\\"{export}\\\")\")"))
-                .collect::<Vec<String>>();
-
-            monte_carlo.push_str(&export_lines.join("\n\t"));
-
             monte_carlo.push_str("\n}");
 
             monte_carlo
