@@ -69,6 +69,10 @@ impl Component for Register {
     ) -> substrate::error::Result<()> {
         let d = ctx.port("d");
         let clk = ctx.port("clk");
+        let corners = ctx.inner().corner_db();
+        let tt = corners.try_default_corner()?;
+        let pvt = Pvt::new(tt.clone(), 1.8, 25.0);
+
         let rise = FloatLut2::builder()
             .k1(vec![0.01, 0.5, 1.5])
             .k2(vec![0.01, 0.5, 1.5])
@@ -89,16 +93,46 @@ impl Component for Register {
             ])
             .build()
             .unwrap();
-        let corners = ctx.inner().corner_db();
-        let tt = corners.try_default_corner()?;
-        let pvt = Pvt::new(tt.clone(), 1.8, 27.0);
+        ctx.add_constraint(
+            SetupHoldConstraint::builder()
+                .pvt(pvt.clone())
+                .port(d.into_single())
+                .related_port(clk.into_single())
+                .related_port_transition(EdgeDir::Rising)
+                .kind(ConstraintKind::Setup)
+                .rise(rise)
+                .fall(fall)
+                .build()
+                .unwrap(),
+        );
+
+        let rise = FloatLut2::builder()
+            .k1(vec![0.01, 0.5, 1.5])
+            .k2(vec![0.01, 0.5, 1.5])
+            .values(vec![
+                vec![-0.0285176, -0.1316588, -0.1857767],
+                vec![0.0355612, -0.0602559, -0.1143737],
+                vec![0.0579408, -0.0354349, -0.0895527],
+            ])
+            .build()
+            .unwrap();
+        let fall = FloatLut2::builder()
+            .k1(vec![0.01, 0.5, 1.5])
+            .k2(vec![0.01, 0.5, 1.5])
+            .values(vec![
+                vec![-0.0468281, -0.2512878, -0.5178079],
+                vec![0.0636374, -0.1408223, -0.4146667],
+                vec![0.1409486, -0.059849, -0.3349141],
+            ])
+            .build()
+            .unwrap();
         ctx.add_constraint(
             SetupHoldConstraint::builder()
                 .pvt(pvt)
                 .port(d.into_single())
                 .related_port(clk.into_single())
                 .related_port_transition(EdgeDir::Rising)
-                .kind(ConstraintKind::Setup)
+                .kind(ConstraintKind::Hold)
                 .rise(rise)
                 .fall(fall)
                 .build()
@@ -227,15 +261,15 @@ fn test_register_timing_constraints() {
     ctx._write_simulation::<RegTb>(&valid_tb, work_dir, None, VerifyTiming::Yes(pvt.clone()))
         .expect("failed to run simulation");
 
-    let invalid_tb = RegTb {
+    let invalid_setup_tb = RegTb {
         td: 40e-12,
         vdd: 1.8,
         tr: 20e-12,
         tf: 20e-12,
     };
-    let work_dir = out_path("test_register_timing_constraints", "sim_invalid");
+    let work_dir = out_path("test_register_timing_constraints", "sim_invalid_setup");
     let err = ctx
-        ._write_simulation::<RegTb>(&invalid_tb, work_dir, None, VerifyTiming::Yes(pvt))
+        ._write_simulation::<RegTb>(&invalid_setup_tb, work_dir, None, VerifyTiming::Yes(pvt.clone()))
         .expect_err("expected timing constraints to fail and return error");
     assert!(matches!(err.source(), ErrorSource::TimingFailed(_)));
 }

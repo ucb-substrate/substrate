@@ -33,6 +33,7 @@ where
     pub fn get(&self, k1: &K1, k2: &K2) -> Option<&V> {
         let i1 = self.k1.partition_point(|k| k < k1);
         let i2 = self.k2.partition_point(|k| k < k2);
+        if k1 < self.k1.get(0)? || k2 < self.k2.get(0)? { return None; }
         self.values.get(i1)?.get(i2)
     }
 }
@@ -84,11 +85,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(lut.get(&5, &2), Some(&5));
-        assert_eq!(lut.get(&4, &2), Some(&5));
+        assert_eq!(lut.get(&4, &2), None);
         assert_eq!(lut.get(&7, &3), Some(&7));
         assert_eq!(lut.get(&8, &3), None);
         assert_eq!(lut.get(&6, &4), None);
-        assert_eq!(lut.get(&6, &0), Some(&2));
+        assert_eq!(lut.get(&6, &0), None);
     }
 
     #[test]
