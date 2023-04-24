@@ -603,7 +603,9 @@ pub(crate) fn generate_timing_report<'a>(
                     .unwrap_or_else(|| panic!("waveform not found: {port}"));
 
                 let related_port_name = constraint.related_port.as_ref().unwrap();
+                println!("{:?}", related_port_name);
                 let related_port = &simulator.node_voltage_string(related_port_name);
+                println!("{}", related_port);
                 let related_port = data
                     .waveform(related_port)
                     .unwrap_or_else(|| panic!("waveform not found: {related_port}"));
