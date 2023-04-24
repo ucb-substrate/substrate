@@ -149,7 +149,7 @@ impl<'a> NetlistPreprocessor<'a> {
 impl PreprocessedNetlist {
     /// Resolves nested signals in a path, giving the least nested reference to the same signal.
     pub(crate) fn simplify_path(&self, mut path: SignalPathBuf) -> SignalPathBuf {
-        println!("{:?}", path);
+        println!("{:?}", self.to_named_path(&path));
         if path.insts.is_empty() {
             return path;
         }
@@ -182,7 +182,8 @@ impl PreprocessedNetlist {
                 slice = sig.index(slice.idx).into_single();
             }
         }
-        println!("{:?}", slice);
-        SignalPathBuf::new(Vec::new(), slice)
+        let x = SignalPathBuf::new(Vec::new(), slice);
+        println!("{:?}", self.to_named_path(&x));
+        x
     }
 }

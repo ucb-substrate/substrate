@@ -448,7 +448,7 @@ impl PreprocessedNetlist {
         }
     }
 
-    fn to_named_path(&self, path: &SignalPathBuf) -> NamedSignalPathBuf {
+    pub(crate) fn to_named_path(&self, path: &SignalPathBuf) -> NamedSignalPathBuf {
         let mut module = self.top;
         let mut insts = Vec::with_capacity(path.insts.len());
         for inst in path.insts.iter().copied() {
