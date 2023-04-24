@@ -44,7 +44,7 @@ pub fn search<T, P>(lst: &[T], predicate: P, side: SearchSide) -> Option<(usize,
 where
     P: FnMut(&T) -> SearchRange,
 {
-    search_in_range(lst, predicate, side, 0, lst.len() - 1)
+    search_in_range(lst, predicate, side, 0, lst.len())
 }
 
 pub fn search_in_range<V, P>(
@@ -58,24 +58,25 @@ where
     V: Index<usize> + ?Sized,
     P: FnMut(&V::Output) -> SearchRange,
 {
-    let mut ans = None;
+    if predicate(&lst[lo]) == SearchRange::Down {
+        return match side {
+            SearchSide::After => Some((lo, &lst[lo])),
+            _ => None,
+        };
+    }
 
-    while lo <= hi {
+    let initial_hi = hi;
+
+    while lo + 1 < hi {
         let mid = (lo + hi) / 2;
         let val = &lst[mid];
         let pred = predicate(val);
         match pred {
             SearchRange::Up => {
-                lo = mid + 1;
-                if let SearchSide::Before = side {
-                    ans = Some((mid, val));
-                }
+                lo = mid;
             }
             SearchRange::Down => {
-                hi = mid - 1;
-                if let SearchSide::After = side {
-                    ans = Some((mid, val));
-                }
+                hi = mid;
             }
             SearchRange::Equal => {
                 return Some((mid, val));
@@ -83,7 +84,20 @@ where
         }
     }
 
-    ans
+    if predicate(&lst[lo]) == SearchRange::Equal {
+        return Some((lo, &lst[lo]));
+    }
+    match side {
+        SearchSide::Before => Some((lo, &lst[lo])),
+        SearchSide::After => {
+            if hi < initial_hi {
+                Some((hi, &lst[hi]))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
 }
 
 #[cfg(test)]
