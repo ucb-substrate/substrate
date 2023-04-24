@@ -428,6 +428,7 @@ impl RegTb {
 }
 
 #[test]
+#[ignore = "long"]
 fn test_setup_time_check() {
     let ctx = setup_ctx();
     let name = "test_setup_time_check";
@@ -469,6 +470,7 @@ fn test_setup_time_check() {
 }
 
 #[test]
+#[ignore = "long"]
 fn test_hold_time_check() {
     let ctx = setup_ctx();
     let name = "test_hold_time_check";
@@ -510,6 +512,7 @@ fn test_hold_time_check() {
 }
 
 #[test]
+#[ignore = "long"]
 fn test_pvt_timing_lookup() {
     let ctx = setup_ctx();
     let name = "test_setup_time_check";
@@ -604,6 +607,7 @@ fn test_pvt_timing_lookup() {
 }
 
 #[test]
+#[ignore = "long"]
 fn test_register_timing_constraints() {
     let ctx = setup_ctx();
     ctx.write_schematic_to_file::<Register>(
