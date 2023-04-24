@@ -178,6 +178,7 @@ impl PreprocessedNetlist {
                     &self.modules[modules[i - 1]]
                 };
                 let i = &parent.instance_map()[path.insts[i]];
+                println!("{:?}", info.name());
                 let sig = &i.connections()[info.name()];
                 slice = sig.index(slice.idx).into_single();
             }
