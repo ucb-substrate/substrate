@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use slotmap::new_key_type;
-use sublut::{FloatLut1, FloatLut2};
+use sublut::{Extrapolation, FloatLut1, FloatLut2};
 
 use super::simulation::waveform::{EdgeDir, SharedWaveform, TimeWaveform};
 use super::simulation::{Simulator, TranData};
@@ -541,9 +541,15 @@ pub(crate) fn verify_setup_hold_constraint(
                     let idx2 = config.to_time_unit(clk_edge.duration());
                     // TODO handle extrapolation and add warning
                     let tsu = if tr.dir().is_rising() {
-                        constraint.rise.getf(idx1, idx2).unwrap()
+                        constraint
+                            .rise
+                            .getf_extrapolate(idx1, idx2, Extrapolation::RoundUp)
+                            .unwrap()
                     } else {
-                        constraint.fall.getf(idx1, idx2).unwrap()
+                        constraint
+                            .fall
+                            .getf_extrapolate(idx1, idx2, Extrapolation::RoundUp)
+                            .unwrap()
                     };
 
                     let tsu = config.from_time_unit(tsu);
@@ -567,9 +573,15 @@ pub(crate) fn verify_setup_hold_constraint(
                     let idx2 = config.to_time_unit(clk_edge.duration());
                     // TODO handle extrapolation and add warning
                     let t_hold = if tr.dir().is_rising() {
-                        constraint.rise.getf(idx1, idx2).unwrap()
+                        constraint
+                            .rise
+                            .getf_extrapolate(idx1, idx2, Extrapolation::RoundUp)
+                            .unwrap()
                     } else {
-                        constraint.fall.getf(idx1, idx2).unwrap()
+                        constraint
+                            .fall
+                            .getf_extrapolate(idx1, idx2, Extrapolation::RoundUp)
+                            .unwrap()
                     };
 
                     let t_hold = config.from_time_unit(t_hold);

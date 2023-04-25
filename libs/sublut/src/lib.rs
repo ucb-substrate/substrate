@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use splines::{Key, Spline};
 
-// TODO verify that length of keys and values match
+// TODO verify that length of keys and values match, and that k1 is sorted
 #[derive(Debug, Default, Clone, Eq, PartialEq, Builder, Serialize, Deserialize)]
 #[builder(pattern = "owned")]
 pub struct Lut1<K1, V> {
@@ -17,6 +17,13 @@ pub struct Lut2<K1, K2, V> {
     k2: Vec<K2>,
     // row major order
     values: Vec<Vec<V>>,
+}
+
+#[derive(Debug, Default, Clone, Copy, Eq, PartialEq)]
+pub enum Extrapolation {
+    #[default]
+    None,
+    RoundUp,
 }
 
 impl<K1, K2, V> Lut2<K1, K2, V> {
@@ -65,6 +72,19 @@ impl FloatLut2 {
                 .collect(),
         )
         .sample(k1)
+    }
+
+    pub fn getf_extrapolate(
+        &self,
+        mut k1: f64,
+        mut k2: f64,
+        extrapolate: Extrapolation,
+    ) -> Option<f64> {
+        if extrapolate == Extrapolation::RoundUp {
+            (k1, k2) = (k1.max(*self.k1.get(0)?), k2.max(*self.k2.get(0)?));
+        }
+
+        self.getf(k1, k2)
     }
 }
 
