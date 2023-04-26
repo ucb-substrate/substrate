@@ -81,7 +81,7 @@ impl FloatLut2 {
         extrapolate: Extrapolation,
     ) -> Option<f64> {
         if extrapolate == Extrapolation::RoundUp {
-            (k1, k2) = (k1.max(*self.k1.get(0)?), k2.max(*self.k2.get(0)?));
+            (k1, k2) = (k1.max(*self.k1.first()?), k2.max(*self.k2.first()?));
         }
 
         self.getf(k1, k2)
