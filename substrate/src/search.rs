@@ -58,6 +58,9 @@ where
     V: Index<usize> + ?Sized,
     P: FnMut(&V::Output) -> SearchRange,
 {
+    if lo == hi {
+        return None;
+    }
     if predicate(&lst[lo]) == SearchRange::Down {
         return match side {
             SearchSide::After => Some((lo, &lst[lo])),

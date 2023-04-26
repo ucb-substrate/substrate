@@ -164,7 +164,7 @@ impl PreprocessedNetlist {
         assert_eq!(modules.len(), path.insts.len());
 
         let mut slice = path.slice;
-        for i in modules.len() - 1..=0 {
+        for i in (0..modules.len()).rev() {
             let module = &self.modules[modules[i]];
             let info = &module.signals()[slice.signal];
             if !info.is_port() {
