@@ -6,9 +6,9 @@ use std::process::Command;
 
 use anyhow::{bail, Result};
 use lazy_static::lazy_static;
-use psf_ascii::parser::analysis::ac::AcData as PsfAcData;
-use psf_ascii::parser::analysis::dc::DcData as PsfDcData;
-use psf_ascii::parser::analysis::transient::TransientData;
+use psfparser::analysis::ac::AcData as PsfAcData;
+use psfparser::analysis::dc::DcData as PsfDcData;
+use psfparser::analysis::transient::TransientData;
 use serde::Serialize;
 use substrate::verification::simulation::{
     AcData, Analysis, AnalysisData, AnalysisType, ComplexSignal, DcData, MonteCarloData, OpData,
@@ -158,10 +158,10 @@ impl<'a> SpectreOutputParser<'a> {
             };
             let psf_path = self.raw_output_dir.join(file_name);
             let psf = substrate::io::read_to_string(psf_path)?;
-            let ast = psf_ascii::parser::frontend::parse(&psf)?;
+            let ast = psfparser::ascii::frontend::parse(&psf)?;
             Ok(match analysis.analysis_type() {
                 AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
-                AnalysisType::Tran => tran_conv(TransientData::from_ast(&ast)).into(),
+                AnalysisType::Tran => tran_conv(TransientData::from_ascii(&ast)).into(),
                 AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
                 AnalysisType::Op => op_conv(PsfDcData::from_ast(&ast)).into(),
                 _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
