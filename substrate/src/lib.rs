@@ -18,6 +18,7 @@ pub mod search;
 pub mod units;
 pub mod validation;
 pub mod verification;
+pub use codegen;
 
 pub(crate) mod generation;
 pub(crate) mod log;
