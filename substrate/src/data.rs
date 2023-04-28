@@ -809,9 +809,9 @@ impl SubstrateCtx {
         tb.setup(&mut ctx)?;
         self.pdk().pre_sim(&mut ctx)?;
         let simulator = self.simulator().ok_or(ErrorSource::ToolNotSpecified)?;
-        let timing_config = self.try_timing_config()?;
 
         let output = if let VerifyTiming::Yes(ref pvt) = verify_timing {
+            let timing_config = self.try_timing_config()?;
             let mut constraints = netlist.timing_constraint_db(pvt);
 
             for constraint in constraints.named_constraints(&netlist) {
