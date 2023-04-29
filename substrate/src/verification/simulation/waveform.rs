@@ -125,7 +125,11 @@ pub trait TimeWaveform {
         let mut max = None;
         for i in 0..self.len() {
             let point = self.get(i)?;
-            if max.is_none() || *max.as_ref().unwrap() < point.x {
+            if let Some(max_val) = max.as_mut() {
+                if *max_val < point.x {
+                    *max_val = point.x;
+                }
+            } else {
                 max = Some(point.x);
             }
         }
@@ -133,14 +137,18 @@ pub trait TimeWaveform {
     }
 
     fn min_x(&self) -> Option<f64> {
-        let mut max = None;
+        let mut min = None;
         for i in 0..self.len() {
             let point = self.get(i)?;
-            if max.is_none() || *max.as_ref().unwrap() < point.x {
-                max = Some(point.x);
+            if let Some(min_val) = min.as_mut() {
+                if *min_val > point.x {
+                    *min_val = point.x;
+                }
+            } else {
+                min = Some(point.x);
             }
         }
-        max
+        min
     }
 
     fn mid_x(&self) -> Option<f64> {
