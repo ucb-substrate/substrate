@@ -120,6 +120,29 @@ pub trait TimeWaveform {
         let p1 = self.get(idx + 1).unwrap();
         linear_interp(p0.t(), p0.x(), p1.t(), p1.x(), t)
     }
+
+    /// Returns the time integral of this waveform.
+    ///
+    /// By default, uses trapezoidal integration.
+    /// Returns 0.0 if the length of the waveform is less than 2.
+    fn integral(&self) -> f64 {
+        let n = self.len();
+        if n < 2 {
+            return 0.0;
+        }
+
+        let mut integral = 0.0;
+
+        for i in 0..self.len() - 1 {
+            let p0 = self.get(i).unwrap();
+            let p1 = self.get(i + 1).unwrap();
+            let dt = p1.t - p0.t;
+            let avg = (p0.x + p1.x) / 2.0;
+            integral += avg * dt;
+        }
+
+        integral
+    }
 }
 
 fn linear_interp(t0: f64, y0: f64, t1: f64, y1: f64, t: f64) -> f64 {
@@ -602,6 +625,7 @@ pub(crate) fn binary_search_before(data: &[f64], target: f64) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    use float_eq::float_eq;
     use itertools::Itertools;
 
     use super::*;
@@ -667,5 +691,23 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn waveform_integral() {
+        let wav = Waveform {
+            values: into_vec![
+                (0., 0.),
+                (1., 1.),
+                (2., 0.9),
+                (3., 0.1),
+                (4., 0.),
+                (5., 1.),
+                (8., 1.1)
+            ],
+        };
+        let expected = 0.5 + 0.95 + 0.5 + 0.05 + 0.5 + 3.0 * 1.05;
+        let integral = wav.integral();
+        assert!(float_eq!(integral, expected, r2nd <= 1e-8));
     }
 }
