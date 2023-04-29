@@ -120,6 +120,32 @@ pub trait TimeWaveform {
         let p1 = self.get(idx + 1).unwrap();
         linear_interp(p0.t(), p0.x(), p1.t(), p1.x(), t)
     }
+
+    fn max_x(&self) -> Option<f64> {
+        let mut max = None;
+        for i in 0..self.len() {
+            let point = self.get(i)?;
+            if max.is_none() || *max.as_ref().unwrap() < point.x {
+                max = Some(point.x);
+            }
+        }
+        max
+    }
+
+    fn min_x(&self) -> Option<f64> {
+        let mut max = None;
+        for i in 0..self.len() {
+            let point = self.get(i)?;
+            if max.is_none() || *max.as_ref().unwrap() < point.x {
+                max = Some(point.x);
+            }
+        }
+        max
+    }
+
+    fn mid_x(&self) -> Option<f64> {
+        Some((self.max_x()? + self.min_x()?) / 2.0)
+    }
 }
 
 fn linear_interp(t0: f64, y0: f64, t1: f64, y1: f64, t: f64) -> f64 {
