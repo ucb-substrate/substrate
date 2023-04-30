@@ -37,6 +37,11 @@ impl PreSimCtx {
         self
     }
 
+    pub fn set_temp(&mut self, temp: f64) -> &mut Self {
+        self.input.opts.temp = Some(temp);
+        self
+    }
+
     pub fn include_lib(
         &mut self,
         path: impl Into<PathBuf>,
@@ -52,6 +57,18 @@ impl PreSimCtx {
     pub fn set_ic(&mut self, node: impl Into<String>, value: SiValue) -> &mut Self {
         self.input.ic.insert(node.into(), value);
         self
+    }
+
+    #[inline]
+    #[allow(unused)]
+    pub(crate) fn inner(&self) -> &SimInput {
+        &self.input
+    }
+
+    #[inline]
+    #[allow(unused)]
+    pub(crate) fn inner_mut(&mut self) -> &mut SimInput {
+        &mut self.input
     }
 
     #[inline]
