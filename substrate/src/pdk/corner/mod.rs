@@ -59,6 +59,26 @@ impl Pvt {
             temp,
         }
     }
+
+    #[inline]
+    pub fn voltage(&self) -> f64 {
+        self.voltage
+    }
+
+    #[inline]
+    pub fn temp(&self) -> f64 {
+        self.temp
+    }
+
+    #[inline]
+    pub fn corner_key(&self) -> CornerKey {
+        self.corner.id()
+    }
+
+    #[inline]
+    pub fn corner(&self) -> &CornerEntry {
+        &self.corner
+    }
 }
 
 #[derive(Debug)]
@@ -108,23 +128,6 @@ impl CornerEntry {
     #[inline]
     pub fn pmos(&self) -> Option<CornerSkew> {
         self.data.pmos()
-    }
-}
-
-impl Pvt {
-    #[inline]
-    pub fn corner(&self) -> &CornerEntry {
-        &self.corner
-    }
-
-    #[inline]
-    pub fn voltage(&self) -> f64 {
-        self.voltage
-    }
-
-    #[inline]
-    pub fn temp(&self) -> f64 {
-        self.temp
     }
 }
 
