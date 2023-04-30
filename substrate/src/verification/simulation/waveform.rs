@@ -121,6 +121,40 @@ pub trait TimeWaveform {
         linear_interp(p0.t(), p0.x(), p1.t(), p1.x(), t)
     }
 
+    fn max_x(&self) -> Option<f64> {
+        let mut max = None;
+        for i in 0..self.len() {
+            let point = self.get(i)?;
+            if let Some(max_val) = max.as_mut() {
+                if *max_val < point.x {
+                    *max_val = point.x;
+                }
+            } else {
+                max = Some(point.x);
+            }
+        }
+        max
+    }
+
+    fn min_x(&self) -> Option<f64> {
+        let mut min = None;
+        for i in 0..self.len() {
+            let point = self.get(i)?;
+            if let Some(min_val) = min.as_mut() {
+                if *min_val > point.x {
+                    *min_val = point.x;
+                }
+            } else {
+                min = Some(point.x);
+            }
+        }
+        min
+    }
+
+    fn mid_x(&self) -> Option<f64> {
+        Some((self.max_x()? + self.min_x()?) / 2.0)
+    }
+
     /// Returns the time integral of this waveform.
     ///
     /// By default, uses trapezoidal integration.
