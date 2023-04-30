@@ -554,7 +554,7 @@ pub(crate) fn verify_setup_hold_constraint(
 
                     let tsu = config.from_time_unit(tsu);
 
-                    let slack = t - tr.end_time() - tsu;
+                    let slack = t - tr.center_time() - tsu;
                     report.add_setup_check(slack, || TimingCheck {
                         slack,
                         time: t,
@@ -586,7 +586,7 @@ pub(crate) fn verify_setup_hold_constraint(
 
                     let t_hold = config.from_time_unit(t_hold);
 
-                    let slack = tr.start_time() - t - t_hold;
+                    let slack = tr.center_time() - t - t_hold;
                     report.add_hold_check(slack, || TimingCheck {
                         slack,
                         time: t,
