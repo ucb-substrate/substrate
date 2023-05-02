@@ -177,8 +177,9 @@ impl TransformationBuilder {
         let b = [self.x, self.y];
         let sin = self.angle.to_radians().sin();
         let cos = self.angle.to_radians().cos();
+        let sin_refl = if self.reflect_vert { sin } else { -sin };
         let cos_refl = if self.reflect_vert { -cos } else { cos };
-        let a = [[cos, -sin], [sin, cos_refl]];
+        let a = [[cos, sin_refl], [sin, cos_refl]];
         Transformation { a, b }
     }
 }
