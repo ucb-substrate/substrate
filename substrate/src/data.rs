@@ -834,6 +834,8 @@ impl SubstrateCtx {
             );
 
             report.log();
+            let path = work_dir.join("timing.rpt");
+            report.save_to_file(path)?;
             if report.is_failure() {
                 return Err(ErrorSource::TimingFailed(report).into());
             }
