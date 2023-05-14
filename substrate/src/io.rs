@@ -20,6 +20,14 @@ pub fn create_file(path: impl AsRef<Path>) -> Result<std::fs::File> {
     Ok(file)
 }
 
+pub fn read<P: AsRef<Path>>(path: P) -> Result<Vec<u8>> {
+    let path = path.as_ref();
+    let data = with_err_context(std::fs::read(path), || {
+        ErrorContext::ReadFile(path.to_path_buf())
+    })?;
+    Ok(data)
+}
+
 pub fn read_to_string<P: AsRef<Path>>(path: P) -> Result<String> {
     let path = path.as_ref();
     let data = with_err_context(std::fs::read_to_string(path), || {

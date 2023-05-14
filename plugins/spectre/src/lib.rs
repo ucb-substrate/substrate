@@ -127,6 +127,7 @@ impl<'a> SpectreOutputParser<'a> {
         prefix: &str,
         num: usize,
         analyses: &[Analysis],
+        binary: bool,
     ) -> Result<AnalysisData> {
         let analysis = &analyses[num];
         let name = analysis_name(prefix, num);
@@ -137,7 +138,12 @@ impl<'a> SpectreOutputParser<'a> {
                 let mut mc_data = Vec::new();
                 for iter in 1..analysis.num_iterations + 1 {
                     let new_prefix = format!("{}-{:0>3}_{}", name, iter, name);
-                    mc_data.push(self.parse_analysis(&new_prefix, i, &analysis.analyses)?);
+                    mc_data.push(self.parse_analysis(
+                        &new_prefix,
+                        i,
+                        &analysis.analyses,
+                        binary,
+                    )?);
                 }
                 data.push(mc_data);
             }
@@ -157,23 +163,39 @@ impl<'a> SpectreOutputParser<'a> {
                 _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
             };
             let psf_path = self.raw_output_dir.join(file_name);
-            let psf = substrate::io::read_to_string(psf_path)?;
-            let ast = psfparser::ascii::frontend::parse(&psf)?;
-            Ok(match analysis.analysis_type() {
-                AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
-                AnalysisType::Tran => tran_conv(TransientData::from_ascii(&ast)).into(),
-                AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
-                AnalysisType::Op => op_conv(PsfDcData::from_ast(&ast)).into(),
-                _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
-            })
+
+            if binary {
+                let psf = substrate::io::read(psf_path)?;
+                let ast = psfparser::binary::parse(&psf)?;
+                Ok(match analysis.analysis_type() {
+                    AnalysisType::Tran => tran_conv(TransientData::from_binary(ast)).into(),
+                    _ => bail!("spectre plugin only supports reading transient simulations from binary PSF files"),
+                })
+            } else {
+                let psf = substrate::io::read_to_string(psf_path)?;
+                let ast = psfparser::ascii::frontend::parse(&psf)?;
+                Ok(match analysis.analysis_type() {
+                    AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
+                    AnalysisType::Tran => tran_conv(TransientData::from_ascii(&ast)).into(),
+                    AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
+                    AnalysisType::Op => op_conv(PsfDcData::from_ast(&ast)).into(),
+                    _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
+                })
+            }
         }
     }
 
     fn parse_analyses(mut self, input: &SimInput) -> Result<Vec<AnalysisData>> {
         let mut analyses = Vec::new();
-        if output_format_name(&input.output_format) == "psfascii" {
+        let format = output_format_name(input, &input.output_format);
+        if format == "psfbin" || format == "psfascii" {
             for i in 0..input.analyses.len() {
-                let analysis = self.parse_analysis(BASE_ANALYSIS_PREFIX, i, &input.analyses)?;
+                let analysis = self.parse_analysis(
+                    BASE_ANALYSIS_PREFIX,
+                    i,
+                    &input.analyses,
+                    format == "psfbin",
+                )?;
                 analyses.push(analysis);
             }
         }
@@ -284,11 +306,20 @@ pub fn run_spectre(input: &SimInput) -> Result<Vec<AnalysisData>> {
     SpectreOutputParser::new(&paths.raw_output_dir).parse_analyses(input)
 }
 
-fn output_format_name(format: &OutputFormat) -> &str {
+fn output_format_name<'a>(input: &SimInput, format: &'a OutputFormat) -> &'a str {
+    let all_tran = input
+        .analyses
+        .iter()
+        .all(|a| a.analysis_type() == AnalysisType::Tran);
     match format {
-        OutputFormat::DefaultReadable => "psfascii",
-        OutputFormat::DefaultViewable => "fsdb",
         OutputFormat::Custom(s) => s,
+        _ => {
+            if all_tran {
+                "psfbin"
+            } else {
+                "psfascii"
+            }
+        }
     }
 }
 
@@ -319,7 +350,7 @@ fn write_run_script(paths: &Paths, input: &SimInput) -> Result<()> {
         raw_output_dir: &paths.raw_output_dir,
         log_path: &paths.log_path,
         bashrc: input.opts.bashrc.as_ref(),
-        format: output_format_name(&input.output_format),
+        format: output_format_name(input, &input.output_format),
         flags: &flags(input),
     };
     let ctx = Context::from_serialize(ctx)?;
