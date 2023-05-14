@@ -232,7 +232,7 @@ fn save_directives(input: &SimInput, directives: &mut Vec<String>) {
                 directives.push(format!("save \"{s}\""));
             }
         }
-        Save::All => directives.push("opsaveall options save=all".to_string()),
+        Save::All => directives.push("opsaveall options save=allpub".to_string()),
         Save::None => directives.push("opsavenone options save=none".to_string()),
     }
 }
