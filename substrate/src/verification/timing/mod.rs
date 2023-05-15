@@ -1,5 +1,6 @@
 use std::collections::{BinaryHeap, HashMap};
 use std::ops::{Deref, DerefMut};
+use std::path::Path;
 
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
@@ -184,7 +185,7 @@ pub struct TimingView {
     pub(crate) constraints: Vec<TimingConstraint>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TimingCheck {
     slack: f64,
     time: f64,
@@ -260,7 +261,7 @@ impl PartialOrd for MinSlack {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimingReport {
     pub(crate) setup_checks: Vec<TimingCheck>,
     pub(crate) hold_checks: Vec<TimingCheck>,
@@ -298,6 +299,12 @@ impl TimingReport {
             .map(|c| c.slack < 0.0)
             .unwrap_or_default();
         setup_fail || hold_fail
+    }
+
+    pub fn save_to_file(&self, path: impl AsRef<Path>) -> crate::error::Result<()> {
+        let mut out = crate::io::create_file(path)?;
+        serde_json::to_writer_pretty(&mut out, self)?;
+        Ok(())
     }
 }
 
