@@ -208,10 +208,9 @@ impl Sky130Pdk {
                 }
 
                 let via_rect = Rect::new(Point::zero(), Point::new(device.w, 0));
-                let metal_rect = Rect::new(Point::zero(), Point::new(2 * device.w, 0));
                 let via_params = ViaParams::builder()
                     .layers(diff, sd_metal)
-                    .geometry(via_rect, metal_rect)
+                    .geometry(via_rect, via_rect)
                     .expand(ViaExpansion::LongerDirection)
                     .bot_extension(Dir::Horiz)
                     .top_extension(Dir::Horiz)

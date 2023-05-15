@@ -249,14 +249,14 @@ impl GreedyRouter {
 
                 if let Some((prev_layer, prev_rect)) = prev {
                     if prev_layer != layer {
-                        let (bot, top) = if prev_layer < layer {
-                            (prev_layer, layer)
+                        let (bot, bot_rect, top, top_rect) = if prev_layer < layer {
+                            (prev_layer, prev_rect, layer, rect)
                         } else {
-                            (layer, prev_layer)
+                            (layer, rect, prev_layer, prev_rect)
                         };
                         let viap = ViaParams::builder()
                             .layers(self.layer(bot), self.layer(top))
-                            .geometry(prev_rect, rect)
+                            .geometry(bot_rect, top_rect)
                             .build();
                         let via = ctx.instantiate::<Via>(&viap)?;
                         self.group.add_instance(via);
