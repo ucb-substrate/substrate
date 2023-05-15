@@ -155,6 +155,9 @@ pub struct DcAnalysis {
     pub start: f64,
     pub stop: f64,
     pub step: f64,
+    /// Simulator-specific options.
+    #[builder(default)]
+    pub opts: HashMap<String, String>,
 }
 
 impl DcAnalysis {
@@ -172,6 +175,9 @@ pub struct TranAnalysis {
     pub start: f64,
     #[builder(default, setter(strip_option))]
     pub strobe_period: Option<f64>,
+    /// Simulator-specific options.
+    #[builder(default)]
+    pub opts: HashMap<String, String>,
 }
 
 impl TranAnalysis {
@@ -187,6 +193,9 @@ pub struct AcAnalysis {
     pub fstop: f64,
     pub points: usize,
     pub sweep: SweepMode,
+    /// Simulator-specific options.
+    #[builder(default)]
+    pub opts: HashMap<String, String>,
 }
 
 impl AcAnalysis {
