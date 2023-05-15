@@ -406,6 +406,7 @@ fn get_analyses(input: &[Analysis]) -> Result<Vec<String>> {
 }
 
 fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
+    use std::fmt::Write;
     let name = analysis_name(prefix, num);
     Ok(match input {
         Analysis::Op(_) => format!("{name} dc"),
@@ -415,21 +416,37 @@ fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
             } else {
                 String::new()
             };
-            format!(
+            let mut line = format!(
                 "{name} tran step={} stop={} start={}{}",
                 a.step, a.stop, a.start, strobe
-            )
+            );
+            for (k, v) in a.opts.iter() {
+                write!(&mut line, " {}={}", k, v).unwrap();
+            }
+            line
         }
-        Analysis::Ac(a) => format!(
-            "{name} ac start={} stop={} {}",
-            a.fstart,
-            a.fstop,
-            fmt_sweep_mode(a.sweep, a.points),
-        ),
-        Analysis::Dc(a) => format!(
-            "{name} dc {} start={} stop={} step={}",
-            a.sweep, a.start, a.stop, a.step
-        ),
+        Analysis::Ac(a) => {
+            let mut line = format!(
+                "{name} ac start={} stop={} {}",
+                a.fstart,
+                a.fstop,
+                fmt_sweep_mode(a.sweep, a.points),
+            );
+            for (k, v) in a.opts.iter() {
+                write!(&mut line, " {}={}", k, v).unwrap();
+            }
+            line
+        }
+        Analysis::Dc(a) => {
+            let mut line = format!(
+                "{name} dc {} start={} stop={} step={}",
+                a.sweep, a.start, a.stop, a.step
+            );
+            for (k, v) in a.opts.iter() {
+                write!(&mut line, " {}={}", k, v).unwrap();
+            }
+            line
+        }
         Analysis::MonteCarlo(a) => {
             let mut monte_carlo = format!("{name} montecarlo");
             monte_carlo.push_str(&format!(
