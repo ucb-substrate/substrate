@@ -121,7 +121,10 @@ impl RoutedStraps {
                         for t in t.iter_mut() {
                             if index(t.net) == segment.track_id % 2 {
                                 let intersection = t.rect.intersection(segment.rect.bbox());
-                                if !intersection.is_empty() {
+                                if !intersection.is_empty()
+                                    && (intersection.width() == segment.rect.width()
+                                        || intersection.height() == segment.rect.height())
+                                {
                                     let viap = ViaParams::builder()
                                         .geometry(t.rect, segment.rect)
                                         .layers(*bot, *top)
