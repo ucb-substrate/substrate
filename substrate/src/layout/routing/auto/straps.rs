@@ -92,10 +92,14 @@ impl RoutedStraps {
         ctx: &mut LayoutCtx,
     ) -> crate::error::Result<PlacedStraps> {
         assert!(self.strap_layers.len() >= 2);
-        let mut map = HashMap::new();
+        let mut segment_map = HashMap::new();
+        let mut strap_map = HashMap::new();
 
         for layer in self.strap_layers.iter() {
-            let segments = router.segments(*layer);
+            strap_map.insert(*layer, Vec::new());
+            segment_map.insert(*layer, router.segments(*layer));
+            let segments = segment_map.get_mut(layer).unwrap();
+            let track_info = router.track_info(*layer);
 
             let layer_idx = router.key_to_index[layer];
             let mut valid_target_layers = Vec::new();
@@ -107,30 +111,26 @@ impl RoutedStraps {
                 let above = router.layers[layer_idx + 1].layer;
                 valid_target_layers.push((above, (*layer, above)));
             }
-            for segment in segments {
-                ctx.draw_rect(*layer, segment.rect);
-                let entry = map.entry(*layer).or_insert(Vec::new());
-                entry.push(Strap {
-                    rect: segment.rect,
-                    net: net_from_idx(segment.track_id),
-                    lower_boundary: segment.lower_boundary,
-                    upper_boundary: segment.upper_boundary,
-                });
+            for segment in segments.iter_mut() {
                 for (target_layer, (bot, top)) in valid_target_layers.iter() {
                     if let Some(t) = self.targets.get_mut(target_layer) {
                         for t in t.iter_mut() {
                             if index(t.net) == segment.track_id % 2 {
                                 let intersection = t.rect.intersection(segment.rect.bbox());
-                                if !intersection.is_empty() {
+                                if !intersection.is_empty()
+                                    && (intersection.into_rect().length(track_info.dir)
+                                        == t.rect.length(track_info.dir)
+                                        && intersection.into_rect().length(!track_info.dir)
+                                            == track_info.tracks.line)
+                                {
                                     let viap = ViaParams::builder()
                                         .geometry(t.rect, segment.rect)
                                         .layers(*bot, *top)
                                         .build();
                                     let via = ctx.instantiate::<Via>(&viap)?;
-                                    if intersection.bbox().union(via.bbox()) == intersection {
-                                        ctx.draw(via)?;
-                                        t.hit = true;
-                                    }
+                                    ctx.draw(via)?;
+                                    segment.hit = true;
+                                    t.hit = true;
                                 }
                             }
                         }
@@ -147,8 +147,8 @@ impl RoutedStraps {
             let bot_segments = router.segments(bot);
 
             let mut via: Option<Instance> = None;
-            for t in top_segments.iter().copied() {
-                for b in bot_segments.iter().copied() {
+            for (i, t) in top_segments.iter().copied().enumerate() {
+                for (j, b) in bot_segments.iter().copied().enumerate() {
                     let intersection = t.rect.intersection(b.rect.bbox());
                     if t.track_id % 2 == b.track_id % 2 && !intersection.is_empty() {
                         if let Some(ref via) = via {
@@ -166,11 +166,28 @@ impl RoutedStraps {
                             via = Some(inner.clone());
                             ctx.draw(inner)?;
                         }
+                        segment_map.get_mut(&top).unwrap()[i].hit = true;
+                        segment_map.get_mut(&bot).unwrap()[j].hit = true;
                     }
                 }
             }
         }
 
-        Ok(PlacedStraps { inner: map })
+        for layer in self.strap_layers.iter() {
+            let segments = segment_map.get(layer).unwrap();
+            for segment in segments {
+                if segment.hit {
+                    ctx.draw_rect(*layer, segment.rect);
+                    strap_map.get_mut(layer).unwrap().push(Strap {
+                        rect: segment.rect,
+                        net: net_from_idx(segment.track_id),
+                        lower_boundary: segment.lower_boundary,
+                        upper_boundary: segment.upper_boundary,
+                    });
+                }
+            }
+        }
+
+        Ok(PlacedStraps { inner: strap_map })
     }
 }
