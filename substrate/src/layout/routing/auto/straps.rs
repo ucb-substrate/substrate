@@ -121,17 +121,16 @@ impl RoutedStraps {
                         for t in t.iter_mut() {
                             if index(t.net) == segment.track_id % 2 {
                                 let intersection = t.rect.intersection(segment.rect.bbox());
-                                if !intersection.is_empty()
-                                    && (intersection.width() == segment.rect.width()
-                                        || intersection.height() == segment.rect.height())
-                                {
+                                if !intersection.is_empty() {
                                     let viap = ViaParams::builder()
                                         .geometry(t.rect, segment.rect)
                                         .layers(*bot, *top)
                                         .build();
                                     let via = ctx.instantiate::<Via>(&viap)?;
-                                    ctx.draw(via)?;
-                                    t.hit = true;
+                                    if intersection.bbox().union(via.bbox()) == intersection {
+                                        ctx.draw(via)?;
+                                        t.hit = true;
+                                    }
                                 }
                             }
                         }
