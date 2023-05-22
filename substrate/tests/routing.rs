@@ -5,7 +5,7 @@ use substrate::component::{Component, NoParams};
 use substrate::index::IndexOwned;
 use substrate::layout::layers::selector::Selector;
 use substrate::layout::routing::auto::grid::{
-    ExpandToGridStrategy, JogToGrid, OffGridBusTranslation,
+    ExpandToGridStrategy, JogToGrid, OffGridBusTranslation, OffGridBusTranslationStrategy,
 };
 use substrate::layout::routing::auto::straps::{RoutedStraps, Target};
 use substrate::layout::routing::auto::{GreedyRouter, GreedyRouterConfig, LayerConfig};
@@ -435,6 +435,7 @@ impl Component for OffGridRouting {
         let bus1b = router.register_off_grid_bus_translation(
             ctx,
             OffGridBusTranslation::builder()
+                .strategy(OffGridBusTranslationStrategy::Parallel)
                 .line_and_space(bus1_tracks.line, bus1_tracks.space)
                 .layer(m3)
                 .output(bus1_bbox.edge(Side::Bot))
@@ -446,6 +447,7 @@ impl Component for OffGridRouting {
         let bus1t = router.register_off_grid_bus_translation(
             ctx,
             OffGridBusTranslation::builder()
+                .strategy(OffGridBusTranslationStrategy::Parallel)
                 .line_and_space(bus1_tracks.line, bus1_tracks.space)
                 .layer(m3)
                 .output(bus1_bbox.edge(Side::Top))
@@ -457,6 +459,7 @@ impl Component for OffGridRouting {
         let bus2 = router.register_off_grid_bus_translation(
             ctx,
             OffGridBusTranslation::builder()
+                .strategy(OffGridBusTranslationStrategy::Parallel)
                 .line_and_space(bus2_tracks.line, bus2_tracks.space)
                 .layer(m2)
                 .output(bus2_bbox.edge(Side::Right))
@@ -468,6 +471,7 @@ impl Component for OffGridRouting {
         let bus3l = router.register_off_grid_bus_translation(
             ctx,
             OffGridBusTranslation::builder()
+                .strategy(OffGridBusTranslationStrategy::Parallel)
                 .line_and_space(bus3_tracks.line, bus3_tracks.space)
                 .layer(m2)
                 .output(bus3_bbox.edge(Side::Left))
@@ -480,6 +484,7 @@ impl Component for OffGridRouting {
         let bus3r = router.register_off_grid_bus_translation(
             ctx,
             OffGridBusTranslation::builder()
+                .strategy(OffGridBusTranslationStrategy::Parallel)
                 .line_and_space(bus3_tracks.line, bus3_tracks.space)
                 .layer(m2)
                 .output(bus3_bbox.edge(Side::Right))
@@ -491,6 +496,7 @@ impl Component for OffGridRouting {
         let bus4 = router.register_off_grid_bus_translation(
             ctx,
             OffGridBusTranslation::builder()
+                .strategy(OffGridBusTranslationStrategy::Parallel)
                 .line_and_space(bus4_tracks.line, bus4_tracks.space)
                 .layer(m1)
                 .output(bus4_bbox.edge(Side::Top))
