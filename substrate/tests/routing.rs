@@ -433,6 +433,7 @@ impl Component for OffGridRouting {
             ],
         });
         let bus1b = router.register_off_grid_bus_translation(
+            ctx,
             OffGridBusTranslation::builder()
                 .line_and_space(bus1_tracks.line, bus1_tracks.space)
                 .layer(m3)
@@ -440,9 +441,10 @@ impl Component for OffGridRouting {
                 .start(bus1_bbox.left())
                 .n(6)
                 .build(),
-        );
+        )?;
 
         let bus1t = router.register_off_grid_bus_translation(
+            ctx,
             OffGridBusTranslation::builder()
                 .line_and_space(bus1_tracks.line, bus1_tracks.space)
                 .layer(m3)
@@ -450,9 +452,10 @@ impl Component for OffGridRouting {
                 .start(bus1_bbox.left())
                 .n(6)
                 .build(),
-        );
+        )?;
 
         let bus2 = router.register_off_grid_bus_translation(
+            ctx,
             OffGridBusTranslation::builder()
                 .line_and_space(bus2_tracks.line, bus2_tracks.space)
                 .layer(m2)
@@ -460,9 +463,10 @@ impl Component for OffGridRouting {
                 .start(bus2_bbox.bottom())
                 .n(6)
                 .build(),
-        );
+        )?;
 
         let bus3l = router.register_off_grid_bus_translation(
+            ctx,
             OffGridBusTranslation::builder()
                 .line_and_space(bus3_tracks.line, bus3_tracks.space)
                 .layer(m2)
@@ -471,9 +475,10 @@ impl Component for OffGridRouting {
                 .n(6)
                 .shift(2)
                 .build(),
-        );
+        )?;
 
         let bus3r = router.register_off_grid_bus_translation(
+            ctx,
             OffGridBusTranslation::builder()
                 .line_and_space(bus3_tracks.line, bus3_tracks.space)
                 .layer(m2)
@@ -481,9 +486,10 @@ impl Component for OffGridRouting {
                 .n(6)
                 .start(bus3_bbox.bottom())
                 .build(),
-        );
+        )?;
 
         let bus4 = router.register_off_grid_bus_translation(
+            ctx,
             OffGridBusTranslation::builder()
                 .line_and_space(bus4_tracks.line, bus4_tracks.space)
                 .layer(m1)
@@ -492,7 +498,7 @@ impl Component for OffGridRouting {
                 .n(6)
                 .output_pitch(2)
                 .build(),
-        );
+        )?;
 
         for (port1, port2) in bus1b.ports().zip(bus2.ports()) {
             router.route(ctx, m3, port1, m2, port2)?;
