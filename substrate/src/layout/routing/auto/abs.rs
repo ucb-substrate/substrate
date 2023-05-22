@@ -557,24 +557,6 @@ impl GreedyAbstractRouter {
         self.block_span_inner(span, Some(net));
     }
 
-    fn check_occupy(&mut self, pos: Pos, net: Net) -> Result<()> {
-        match self.grid(pos.layer).get(pos.tx, pos.ty).unwrap() {
-            State::Occupied { net: other, .. } => {
-                if *other != net {
-                    return Err(Error::Occupied);
-                }
-            }
-            State::Blocked { net: other } => {
-                if other.is_none() || other.unwrap() != net {
-                    return Err(Error::Blocked);
-                }
-            }
-            State::Empty => {}
-        };
-
-        Ok(())
-    }
-
     fn occupy_inner(&mut self, pos: Pos, net: Net, conn_group: ConnectionGroup) {
         if let State::Occupied {
             conn_group: old_group,
@@ -593,7 +575,6 @@ impl GreedyAbstractRouter {
     }
 
     pub fn occupy(&mut self, pos: Pos, net: Net) -> Result<()> {
-        self.check_occupy(pos, net)?;
         let group = if let State::Occupied { conn_group, .. } =
             self.grid(pos.layer).get(pos.tx, pos.ty).unwrap()
         {
@@ -609,7 +590,6 @@ impl GreedyAbstractRouter {
         for tx in span.tx_min..=self.clip_grid_index(span.tx_max, Dir::Horiz) {
             for ty in span.ty_min..=self.clip_grid_index(span.ty_max, Dir::Vert) {
                 let pos = Pos::new(span.layer, tx, ty);
-                self.check_occupy(pos, net)?;
                 if let State::Occupied { conn_group, .. } =
                     self.grid(pos.layer).get(pos.tx, pos.ty).unwrap()
                 {

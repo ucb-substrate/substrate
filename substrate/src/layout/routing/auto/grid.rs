@@ -5,17 +5,36 @@ use subgeom::{Corner, Dir, Edge, Rect, Side, Sides, Sign, Span};
 use super::abs::{Layer, PosSpan};
 use super::GreedyRouter;
 use crate::index::IndexOwned;
+use crate::layout::context::LayoutCtx;
+use crate::layout::elements::via::{Via, ViaParams};
 use crate::layout::group::Group;
 use crate::layout::layers::LayerKey;
 use crate::layout::routing::tracks::{TrackLocator, UniformTracks};
+use crate::layout::Draw;
+
+/// Strategy for bringing an off-grid bus onto the grid.
+#[derive(Clone, Copy, Debug)]
+pub enum OffGridBusTranslationStrategy {
+    /// Brings the bus onto grid on the same layer.
+    Parallel,
+    /// Brings the bus onto grid via a perpendicular layer.
+    Perpendicular(LayerKey),
+}
 
 /// An off-grid bus translation to an on-grid bus.
 pub struct OffGridBusTranslation {
+    /// The translation strategy.
+    strategy: OffGridBusTranslationStrategy,
     /// The bus geometry layer.
     layer: LayerKey,
     /// The output edge to be translated to the grid.
     ///
-    /// Should be in the direction of wires in the bus.
+    /// Should be in the direction of wires in the bus if using the
+    /// `OffGridBusTranslationStrategy::Parallel`.
+    ///
+    /// If using `OffGridBusTranslationStrategy::Perpendicular`, should
+    /// be in the direction of the output bus wires and centered where
+    /// the output bus should be centered.
     output: Edge,
     /// The line of the bus.
     line: i64,
@@ -41,6 +60,7 @@ pub struct OffGridBusTranslation {
 /// A builder for an `OffGridBusTranslation`.
 #[derive(Default)]
 pub struct OffGridBusTranslationBuilder {
+    strategy: Option<OffGridBusTranslationStrategy>,
     layer: Option<LayerKey>,
     output: Option<Edge>,
     line: Option<i64>,
@@ -66,6 +86,12 @@ impl OffGridBusTranslation {
 }
 
 impl OffGridBusTranslationBuilder {
+    /// Specifies the translation strategy.
+    pub fn strategy(&mut self, strategy: OffGridBusTranslationStrategy) -> &mut Self {
+        self.strategy = Some(strategy);
+        self
+    }
+
     /// Specifies the bus geometry layer.
     pub fn layer(&mut self, layer: LayerKey) -> &mut Self {
         self.layer = Some(layer);
@@ -122,6 +148,7 @@ impl OffGridBusTranslationBuilder {
     /// Builds an `OffGridBusTranslation`.
     pub fn build(&mut self) -> OffGridBusTranslation {
         OffGridBusTranslation {
+            strategy: self.strategy.unwrap(),
             layer: self.layer.unwrap(),
             output: self.output.unwrap(),
             line: self.line.unwrap(),
@@ -495,7 +522,11 @@ impl GreedyRouter {
     ///
     /// Blocks off grid spaces corresponding to the translation geometry
     /// and returns an `OnGridBus` that can be used for routing.
-    pub fn register_off_grid_bus_translation(&mut self, bus: OffGridBusTranslation) -> OnGridBus {
+    pub fn register_off_grid_bus_translation(
+        &mut self,
+        ctx: &mut LayoutCtx,
+        bus: OffGridBusTranslation,
+    ) -> crate::error::Result<OnGridBus> {
         let dir = bus.output.norm_dir();
 
         let start = bus.output.coord();
@@ -509,85 +540,146 @@ impl GreedyRouter {
             .build()
             .unwrap();
 
-        let perp_tracks = UniformTracks::builder()
-            .line(bus.line)
-            .space(bus.space)
-            .start(start)
-            .sign(sign)
-            .build()
-            .unwrap();
+        let mut ports = Vec::new();
 
-        let mut up = 0;
-        for i in 0..bus.n {
-            let in_span = in_tracks.index(i);
-            let out_span = self.off_grid_bus_out_span(&bus, i);
+        match bus.strategy {
+            OffGridBusTranslationStrategy::Parallel => {
+                let perp_tracks = UniformTracks::builder()
+                    .line(bus.line)
+                    .space(bus.space)
+                    .start(start)
+                    .sign(sign)
+                    .build()
+                    .unwrap();
 
-            if in_span.start() < out_span.start() {
-                up += 1;
+                let mut up = 0;
+                for i in 0..bus.n {
+                    let in_span = in_tracks.index(i);
+                    let out_span = self.off_grid_bus_out_span(&bus, i);
+
+                    if in_span.start() < out_span.start() {
+                        up += 1;
+                    }
+                }
+
+                let max_perp_index = std::cmp::max(up, bus.n - up) - 1;
+                let max_perp_track = perp_tracks.index(max_perp_index);
+                let grid_tracks = self.grid_track(!dir);
+                let last_perp_grid_track = grid_tracks
+                    .index(self.move_to_track_index(max_perp_track.point(sign), bus.output.side()));
+
+                let mut down = 0;
+                let mut rects = Vec::new();
+                for i in 0..bus.n {
+                    let in_span = in_tracks.index(i);
+                    let out_span = self.off_grid_bus_out_span(&bus, i);
+                    let perp_span = out_span.union(in_span);
+
+                    let perp_index = if in_span.start() < out_span.start() {
+                        up -= 1;
+                        if in_span.stop() > out_span.stop() {
+                            down += 1;
+                        }
+                        up
+                    } else {
+                        incr(&mut down)
+                    };
+
+                    let perp_track = perp_tracks.index(perp_index);
+
+                    let rect = Rect::span_builder()
+                        .with(!dir, perp_span)
+                        .with(dir, perp_track)
+                        .build();
+                    rects.push(rect);
+
+                    let rect = Rect::span_builder()
+                        .with(dir, Span::new(start, perp_track.point(sign)))
+                        .with(!dir, in_span)
+                        .build();
+                    rects.push(rect);
+
+                    let rect = Rect::span_builder()
+                        .with(dir, perp_track.union(last_perp_grid_track))
+                        .with(!dir, out_span)
+                        .build();
+                    rects.push(rect);
+                    ports.push(rect);
+                }
+
+                self.block(
+                    bus.layer,
+                    rects
+                        .iter()
+                        .map(|rect| rect.bbox())
+                        .reduce(|acc, bbox| acc.union(bbox))
+                        .unwrap_or(Bbox::empty())
+                        .into_rect(),
+                );
+
+                for rect in rects.iter() {
+                    self.group.add_rect(bus.layer, *rect);
+                }
+            }
+            OffGridBusTranslationStrategy::Perpendicular(layer) => {
+                let output_sign = bus.output.side().sign();
+                let parallel_grid = self.grid_track(bus.output.edge_dir());
+                let output_edge = parallel_grid.index(parallel_grid.track_with_loc(
+                    match output_sign {
+                        Sign::Pos => TrackLocator::EndsAfter,
+                        Sign::Neg => TrackLocator::StartsBefore,
+                    },
+                    bus.output.coord(),
+                ));
+                let out_tracks = &self.track_info(layer).tracks;
+                let center_track = out_tracks.track_at(bus.output.span().center());
+                let mut vias = Vec::new();
+                for i in 0..bus.n {
+                    let in_span = in_tracks.index(i);
+                    let out_span = out_tracks
+                        .index(center_track - (bus.n / 2 - 1 - i) * bus.output_pitch + bus.shift);
+                    let rect = Rect::span_builder()
+                        .with(bus.output.edge_dir(), out_span)
+                        .with(bus.output.norm_dir(), in_span.union(output_edge))
+                        .build();
+                    ports.push(rect);
+                    let bus_layer_idx = self.layer_idx(bus.layer);
+                    let out_layer_idx = self.layer_idx(layer);
+
+                    let (top, bot) = if bus_layer_idx > out_layer_idx {
+                        (bus_layer_idx, out_layer_idx)
+                    } else {
+                        (out_layer_idx, bus_layer_idx)
+                    };
+
+                    let src = Rect::span_builder()
+                        .with(bus.output.edge_dir(), out_span)
+                        .with(bus.output.norm_dir(), in_span)
+                        .build();
+                    for j in bot..top {
+                        vias.push(
+                            ctx.instantiate::<Via>(
+                                &ViaParams::builder()
+                                    .layers(self.layers[j].layer, self.layers[j + 1].layer)
+                                    .geometry(src, src)
+                                    .build(),
+                            )?,
+                        );
+                    }
+                }
+
+                for via in vias {
+                    self.group.add_group(via.draw()?);
+                }
+
+                for port in ports.iter() {
+                    self.block(layer, *port);
+                    self.group.add_rect(layer, *port);
+                }
             }
         }
 
-        let max_perp_index = std::cmp::max(up, bus.n - up) - 1;
-        let max_perp_track = perp_tracks.index(max_perp_index);
-        let grid_tracks = self.grid_track(!dir);
-        let last_perp_grid_track = grid_tracks
-            .index(self.move_to_track_index(max_perp_track.point(sign), bus.output.side()));
-
-        let mut down = 0;
-        let mut ports = Vec::new();
-        let mut rects = Vec::new();
-        for i in 0..bus.n {
-            let in_span = in_tracks.index(i);
-            let out_span = self.off_grid_bus_out_span(&bus, i);
-            let perp_span = out_span.union(in_span);
-
-            let perp_index = if in_span.start() < out_span.start() {
-                up -= 1;
-                if in_span.stop() > out_span.stop() {
-                    down += 1;
-                }
-                up
-            } else {
-                incr(&mut down)
-            };
-
-            let perp_track = perp_tracks.index(perp_index);
-
-            let rect = Rect::span_builder()
-                .with(!dir, perp_span)
-                .with(dir, perp_track)
-                .build();
-            rects.push(rect);
-
-            let rect = Rect::span_builder()
-                .with(dir, Span::new(start, perp_track.point(sign)))
-                .with(!dir, in_span)
-                .build();
-            rects.push(rect);
-
-            let rect = Rect::span_builder()
-                .with(dir, perp_track.union(last_perp_grid_track))
-                .with(!dir, out_span)
-                .build();
-            rects.push(rect);
-            ports.push(rect);
-        }
-
-        self.block(
-            bus.layer,
-            rects
-                .iter()
-                .map(|rect| rect.bbox())
-                .reduce(|acc, bbox| acc.union(bbox))
-                .unwrap_or(Bbox::empty())
-                .into_rect(),
-        );
-
-        for rect in rects.iter() {
-            self.group.add_rect(bus.layer, *rect);
-        }
-
-        OnGridBus { ports }
+        Ok(OnGridBus { ports })
     }
 
     /// Registers a jog to the grid and returns the new grid-aligned port.

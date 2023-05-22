@@ -294,6 +294,7 @@ impl GreedyRouter {
                     .build(),
                 lower_boundary,
                 upper_boundary,
+                hit: false,
             });
         }
         out
@@ -353,4 +354,5 @@ pub struct Segment {
     rect: Rect,
     lower_boundary: bool,
     upper_boundary: bool,
+    hit: bool,
 }

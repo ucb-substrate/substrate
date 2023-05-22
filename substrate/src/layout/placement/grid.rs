@@ -132,6 +132,10 @@ impl<'a> GridTiler<'a> {
         Ok(())
     }
 
+    pub fn port_map(&self) -> &PortMap {
+        &self.ports
+    }
+
     pub fn ports(&self) -> impl Iterator<Item = &CellPort> {
         self.ports.ports()
     }
