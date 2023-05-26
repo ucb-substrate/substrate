@@ -88,9 +88,7 @@ impl Pdk for Sky130CommercialPdk {
         purpose: substrate::schematic::netlist::NetlistPurpose,
     ) -> Result<substrate::schematic::netlist::IncludeBundle> {
         let (raw_spice, includes) = match purpose {
-            NetlistPurpose::Lvs | NetlistPurpose::Pex | NetlistPurpose::Timing => {
-                (CAL_PRELUDE, vec![])
-            }
+            NetlistPurpose::Lvs | NetlistPurpose::Pex => (CAL_PRELUDE, vec![]),
             NetlistPurpose::Simulation { corner } => (
                 SIM_PRELUDE,
                 vec![
@@ -103,6 +101,7 @@ impl Pdk for Sky130CommercialPdk {
                 ],
             ),
             NetlistPurpose::Library => (EMPTY, vec![]),
+            NetlistPurpose::Timing => (SIM_PRELUDE, vec![]),
         };
 
         let includes = includes
