@@ -23,6 +23,8 @@ pub enum NetlistPurpose {
     Pex,
     /// A netlist to use as the top-level schematic in simulation.
     Simulation { corner: CornerEntry },
+    /// A netlist to use for timing extraction.
+    Timing,
 }
 
 impl Display for NetlistPurpose {
@@ -38,6 +40,7 @@ impl NetlistPurpose {
             NetlistPurpose::Pex => "PEX",
             NetlistPurpose::Simulation { .. } => "simulation",
             NetlistPurpose::Library => "library",
+            NetlistPurpose::Timing => "timing",
         }
     }
 
