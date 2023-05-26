@@ -310,7 +310,7 @@ impl TimingReport {
 
 impl Default for TimingReportBuilder {
     fn default() -> Self {
-        Self::with_capacity(4)
+        Self::with_capacity(8192)
     }
 }
 
