@@ -88,7 +88,9 @@ impl Pdk for Sky130CommercialPdk {
         purpose: substrate::schematic::netlist::NetlistPurpose,
     ) -> Result<substrate::schematic::netlist::IncludeBundle> {
         let (raw_spice, includes) = match purpose {
-            NetlistPurpose::Lvs | NetlistPurpose::Pex => (CAL_PRELUDE, vec![]),
+            NetlistPurpose::Lvs | NetlistPurpose::Pex | NetlistPurpose::Timing => {
+                (CAL_PRELUDE, vec![])
+            }
             NetlistPurpose::Simulation { corner } => (
                 SIM_PRELUDE,
                 vec![
@@ -126,6 +128,7 @@ impl Pdk for Sky130CommercialPdk {
 
 const EMPTY: ArcStr = arcstr::literal!("");
 
+/// Simulation prelude.
 const SIM_PRELUDE: ArcStr = arcstr::literal!(
     "*SPICE NETLIST
 * OPEN SOURCE CONVERSION PRELUDE (SPECTRE)
@@ -167,6 +170,7 @@ M0 d g s b nlowvt l='l' w='w' mult='mult'
 "
 );
 
+/// Calibre prelude.
 const CAL_PRELUDE: ArcStr = arcstr::literal!(
     "*SPICE NETLIST
 * OPEN SOURCE CONVERSION PRELUDE (SPICE)
