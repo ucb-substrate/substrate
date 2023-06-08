@@ -25,6 +25,7 @@ impl Sky130Pdk {
             ("xnor3", Function::Xnor3, vec![1, 2, 4]),
             ("xor2", Function::Xor2, vec![1, 2, 4]),
             ("xor3", Function::Xor3, vec![1, 2, 4]),
+            ("diode", Function::Other("diode".to_string()), vec![2]),
             (
                 "dfxtp",
                 Function::Other("pos_ff".to_string()),
