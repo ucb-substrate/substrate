@@ -646,22 +646,34 @@ impl GreedyRouter {
                     let bus_layer_idx = self.layer_idx(bus.layer);
                     let out_layer_idx = self.layer_idx(layer);
 
-                    let (top, bot) = if bus_layer_idx > out_layer_idx {
-                        (bus_layer_idx, out_layer_idx)
-                    } else {
-                        (out_layer_idx, bus_layer_idx)
-                    };
-
                     let src = Rect::span_builder()
                         .with(bus.output.edge_dir(), out_span)
                         .with(bus.output.norm_dir(), in_span)
                         .build();
+                    let src_expanded = Rect::span_builder()
+                        .with(
+                            bus.output.edge_dir(),
+                            out_span.expand_all(out_span.length() * 10),
+                        )
+                        .with(bus.output.norm_dir(), in_span)
+                        .build();
+                    // FIXME: `top_src` and `bot_src` are a hack to make vias prefer to follow the bus
+                    // direction. Can make this an explicit parameter.
+                    let (top, bot, top_src, bot_src) = if bus_layer_idx > out_layer_idx {
+                        (bus_layer_idx, out_layer_idx, src_expanded, src)
+                    } else {
+                        (out_layer_idx, bus_layer_idx, src, src_expanded)
+                    };
+
                     for j in bot..top {
                         vias.push(
                             ctx.instantiate::<Via>(
                                 &ViaParams::builder()
                                     .layers(self.layers[j].layer, self.layers[j + 1].layer)
-                                    .geometry(src, src)
+                                    .geometry(
+                                        if j == bot { bot_src } else { src },
+                                        if j == top - 1 { top_src } else { src },
+                                    )
                                     .build(),
                             )?,
                         );
