@@ -655,6 +655,7 @@ impl SubstrateCtx {
         params: &T::Params,
         work_dir: impl AsRef<Path>,
         pex_netlist_path: impl Into<PathBuf>,
+        ground_net: &str,
     ) -> Result<PexOutput>
     where
         T: Component,
@@ -662,7 +663,7 @@ impl SubstrateCtx {
         let work_dir = work_dir.as_ref();
 
         with_err_context(
-            self._write_pex::<T>(params, work_dir, pex_netlist_path),
+            self._write_pex::<T>(params, work_dir, pex_netlist_path, ground_net),
             || {
                 ErrorContext::Task(arcstr::format!(
                     "running PEX in working directory {:?}",
@@ -677,6 +678,7 @@ impl SubstrateCtx {
         params: &T::Params,
         work_dir: impl AsRef<Path>,
         pex_netlist_path: impl Into<PathBuf>,
+        ground_net: &str,
     ) -> Result<PexOutput>
     where
         T: Component,
@@ -701,6 +703,7 @@ impl SubstrateCtx {
             source_cell_name: cell_name,
             pex_netlist_path: pex_netlist_path.into(),
             opts: HashMap::new(),
+            ground_net: ground_net.to_string(),
         })
     }
 
