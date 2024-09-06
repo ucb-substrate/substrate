@@ -28,6 +28,8 @@ pub struct PexInput {
     pub pex_netlist_path: PathBuf,
     /// Unstructured options.
     pub opts: HashMap<ArcStr, ArcStr>,
+    /// The name of the ground net.
+    pub ground_net: String,
 }
 
 /// An enumeration describing the high-level result of a PEX run.
