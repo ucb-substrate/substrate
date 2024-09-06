@@ -45,7 +45,8 @@ fn tran_conv(data: TransientData) -> TranData {
 
 fn ac_conv(parsed_data: PsfAcData) -> AcData {
     let data = HashMap::from_iter(parsed_data.signals.into_iter().map(|(k, v)| {
-        let (real, imag) = v.iter().copied().unzip();
+        let real = v.iter().map(|v| v.re).collect();
+        let imag = v.iter().map(|v| v.im).collect();
         (
             k,
             ComplexSignal {
@@ -175,7 +176,7 @@ impl<'a> SpectreOutputParser<'a> {
                 let psf = substrate::io::read_to_string(psf_path)?;
                 let ast = psfparser::ascii::frontend::parse(&psf)?;
                 Ok(match analysis.analysis_type() {
-                    AnalysisType::Ac => ac_conv(PsfAcData::from_ast(&ast)).into(),
+                    AnalysisType::Ac => ac_conv(PsfAcData::from_ascii(&ast)).into(),
                     AnalysisType::Tran => tran_conv(TransientData::from_ascii(&ast)).into(),
                     AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
                     AnalysisType::Op => op_conv(PsfDcData::from_ast(&ast)).into(),
