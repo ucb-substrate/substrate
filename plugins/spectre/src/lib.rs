@@ -418,7 +418,7 @@ fn analysis_line(input: &Analysis, prefix: &str, num: usize) -> Result<String> {
                 String::new()
             };
             let mut line = format!(
-                "{name} tran maxstep={} stop={} start={}{}",
+                "{name} tran step={} stop={} start={}{}",
                 a.step, a.stop, a.start, strobe
             );
             for (k, v) in a.opts.iter() {
