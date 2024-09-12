@@ -221,6 +221,7 @@ impl LogicPath {
         c += seg.fixed_cap;
         for (v, mult) in seg.variable_cap.iter() {
             c += self.value(v) * mult;
+            dcdv[v] += mult;
         }
         c += self.elmore_input_capacitance_grad(idx + 1, &mut dcdv);
 
