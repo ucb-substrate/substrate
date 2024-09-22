@@ -166,6 +166,11 @@ M0 d g s b phighvt l='l' w='w' mult='mult'
 .PARAM w=1.0 l=1.0 mult=1
 M0 d g s b nlowvt l='l' w='w' mult='mult'
 .ENDS
+
+.SUBCKT sky130_fd_pr__diode_pw2nd vnb diode
+.PARAM p=1.0 a=1.0
+D0 vnb diode ndiode area='a' pj=2.64
+.ENDS
 "
 );
 
