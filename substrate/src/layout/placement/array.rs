@@ -44,7 +44,7 @@ impl<'a> ArrayTilerBuilder<'a> {
 
     #[inline]
     pub fn space(&mut self, space: i64) -> &mut Self {
-        self.space = Some(space);
+        self.space = space;
         self
     }
 
@@ -56,7 +56,7 @@ impl<'a> ArrayTilerBuilder<'a> {
 
     #[inline]
     pub fn alt_space(&mut self, alt_space: i64) -> &mut Self {
-        self.alt_space = Some(alt_space);
+        self.alt_space = alt_space;
         self
     }
 
