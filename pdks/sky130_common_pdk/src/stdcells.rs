@@ -37,6 +37,7 @@ impl Sky130Pdk {
                     Function::Other("pos_ff".to_string()),
                     vec![1, 2, 4],
                 ),
+                ("dfrbp", Function::Other("pos_ff".to_string()), vec![1, 2]),
             ];
             for (name, function, strengths) in cells {
                 for strength in strengths {
