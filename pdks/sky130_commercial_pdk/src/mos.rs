@@ -44,7 +44,8 @@ impl Sky130CommercialPdk {
         // larger transistors into several 100um segments plus one smaller segment containing
         // the leftover width.
         let mut spice = String::new();
-        let n_extra = params.w / 100_000;
+        const MAX_WIDTH: i64 = 90_000;
+        let n_extra = params.w / MAX_WIDTH;
         let l = params.l as f64 / 1_000.0;
         let nf = params.nf;
         let m = params.m;
@@ -52,12 +53,12 @@ impl Sky130CommercialPdk {
         for i in 1..=n_extra {
             writeln!(
                 &mut spice,
-                "M{i} d g s b {name} w=100.0 l={l:.3} nf={nf} mult={m}"
+                "M{i} d g s b {name} w=90.0 l={l:.3} nf={nf} mult={m}"
             )
             .expect("failed to write to string");
         }
 
-        let w = (params.w % 100_000) as f64 / 1_000.0;
+        let w = (params.w % MAX_WIDTH) as f64 / 1_000.0;
         writeln!(
             &mut spice,
             "M0 d g s b {name} w={w:.3} l={l:.3} nf={nf} mult={m}"
