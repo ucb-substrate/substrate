@@ -49,8 +49,13 @@ impl BitSignal {
         Self { bits }
     }
 
+    #[inline]
     pub fn from_u128(mut value: u128, width: usize) -> Self {
         assert!(width <= 128);
+        Self::from_u128_padded(value, width)
+    }
+
+    pub fn from_u128_padded(mut value: u128, width: usize) -> Self {
         let mut bits = BitVec::with_capacity(width);
         for _ in 0..width {
             bits.push(value & 1 != 0);
