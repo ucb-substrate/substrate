@@ -97,6 +97,10 @@ impl LogicPath {
         Self::default()
     }
 
+    pub fn set_min_var_value(&mut self, min_var_value: f64) {
+        self.min_var_value = min_var_value;
+    }
+
     pub fn create_variable(&mut self) -> VarKey {
         self.variables.insert(VarState::default())
     }
