@@ -5,13 +5,24 @@ new_key_type! {
     pub struct VarKey;
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogicPath {
     segments: Vec<Segment>,
     variables: SlotMap<VarKey, VarState>,
+    min_var_value: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Default for LogicPath {
+    fn default() -> Self {
+        Self {
+            segments: Vec::new(),
+            variables: Default::default(),
+            min_var_value: 1.,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 struct VarState {
     value: f64,
 }
@@ -198,7 +209,7 @@ impl LogicPath {
 
     #[inline]
     pub fn value(&self, var: VarKey) -> f64 {
-        self.variables[var].value
+        f64::max(self.variables[var].value, self.min_var_value)
     }
 
     fn segment_delay_grad(&self, idx: usize, grad: &mut Gradient) -> f64 {
