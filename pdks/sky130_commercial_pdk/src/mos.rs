@@ -1,3 +1,4 @@
+use sky130_common_pdk::Sky130Pdk;
 use substrate::error::Result;
 use substrate::pdk::mos::spec::{MosFlavor, MosId, MosKind, MosSpec};
 use substrate::pdk::mos::MosParams;
@@ -44,26 +45,18 @@ impl Sky130CommercialPdk {
         // larger transistors into several 100um segments plus one smaller segment containing
         // the leftover width.
         let mut spice = String::new();
-        const MAX_WIDTH: i64 = 90_000;
-        let n_extra = params.w / MAX_WIDTH;
         let l = params.l as f64 / 1_000.0;
         let nf = params.nf;
         let m = params.m;
 
-        for i in 1..=n_extra {
+        for (i, w) in Sky130Pdk::fold_mos(params.w).into_iter().enumerate() {
+            let w = w as f64 / 1_000.0;
             writeln!(
                 &mut spice,
-                "M{i} d g s b {name} w=90.0 l={l:.3} nf={nf} mult={m}"
+                "M{i} d g s b {name} w={w:.3} l={l:.3} nf={nf} mult={m}"
             )
             .expect("failed to write to string");
         }
-
-        let w = (params.w % MAX_WIDTH) as f64 / 1_000.0;
-        writeln!(
-            &mut spice,
-            "M0 d g s b {name} w={w:.3} l={l:.3} nf={nf} mult={m}"
-        )
-        .expect("failed to write to string");
 
         ctx.set_spice(spice);
         Ok(())

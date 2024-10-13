@@ -15,14 +15,14 @@ fn test_sky130_mos_nand2() {
             contact_strategy: substrate::pdk::mos::GateContactStrategy::SingleSide,
             devices: vec![
                 MosParams {
-                    w: 1_000,
+                    w: 200_000,
                     l: 150,
                     m: 1,
                     nf: 2,
                     id: MosId::new(0),
                 },
                 MosParams {
-                    w: 1_400,
+                    w: 100_000,
                     l: 150,
                     m: 1,
                     nf: 2,
