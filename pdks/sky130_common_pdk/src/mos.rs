@@ -10,7 +10,7 @@ use substrate::layout::elements::via::{Via, ViaExpansion, ViaParams};
 use substrate::layout::layers::selector::Selector;
 use substrate::layout::layers::{LayerBoundBox, LayerPurpose, LayerSpec};
 use substrate::pdk::mos::spec::MosKind;
-use substrate::pdk::mos::LayoutMosParams;
+use substrate::pdk::mos::{GateContactStrategy, LayoutMosParams};
 
 use crate::constants::{
     DIFF_EDGE_TO_GATE, DIFF_NSDM_ENCLOSURE, DIFF_NWELL_ENCLOSURE, DIFF_PSDM_ENCLOSURE, DIFF_SPACE,
@@ -156,54 +156,81 @@ impl Sky130Pdk {
             ypoly += FINGER_SPACE;
         }
 
-        // Place gate contacts and create gate ports
-        let line = gate_bbox.height();
-        let space = POLY_SPACE;
-        let total_contact_len = nf as i64 * line + (nf as i64 - 1) * space;
         let gate_span = Span::new(poly_rects[0].p0.y, poly_rects.last().unwrap().p1.y);
-        // TODO: Should be gridded.
-        let contact_span = Span::from_center_span(gate_span.center(), total_contact_len);
+        // Place gate contacts and create gate ports
+        match params.contact_strategy {
+            GateContactStrategy::SingleSide => {
+                assert!(
+                    nf <= 2,
+                    "can only contact nf=2 transistors on a single side"
+                );
+                let line = gate_bbox.height();
+                let space = POLY_SPACE;
+                let total_contact_len = nf as i64 * line + (nf as i64 - 1) * space;
+                // TODO: Should be gridded.
+                let contact_span = Span::from_center_span(gate_span.center(), total_contact_len);
 
-        let mut npc_boxes = Vec::new();
+                let mut npc_boxes = Vec::new();
 
-        for i in 0..nf as i64 {
-            let empty_rect = Rect::new(Point::zero(), Point::zero());
-            let gate_ctp = ViaParams::builder()
-                .layers(poly, gate_metal)
-                .geometry(empty_rect, empty_rect)
-                .expand(ViaExpansion::Minimum)
-                .build();
-            let mut gate_ct = ctx.instantiate::<Via>(&gate_ctp)?;
+                for i in 0..nf as i64 {
+                    let empty_rect = Rect::new(Point::zero(), Point::zero());
+                    let gate_ctp = ViaParams::builder()
+                        .layers(poly, gate_metal)
+                        .geometry(empty_rect, empty_rect)
+                        .expand(ViaExpansion::Minimum)
+                        .build();
+                    let mut gate_ct = ctx.instantiate::<Via>(&gate_ctp)?;
 
-            let bot = contact_span.start() + i * (line + space);
-            let rect = poly_rects[i as usize];
-            let ofsx = rect.p0.x - gate_bbox.p1.x;
-            let ofsy = bot - gate_bbox.p0.y;
+                    let bot = contact_span.start() + i * (line + space);
+                    let rect = poly_rects[i as usize];
+                    let ofsx = rect.p0.x - gate_bbox.p1.x;
+                    let ofsy = bot - gate_bbox.p0.y;
 
-            let ct_ofs = Point::new(ofsx, ofsy);
-            gate_ct.translate(ct_ofs);
-            let ct_box = gate_ct.layer_bbox(gate_metal).into_rect();
-            let mut port = CellPort::new(format!("gate_{i}"));
-            port.add(gate_metal, Shape::Rect(ct_box));
-            ctx.add_port(port).unwrap();
-            gate_pins.push(ct_box);
+                    let ct_ofs = Point::new(ofsx, ofsy);
+                    gate_ct.translate(ct_ofs);
+                    let ct_box = gate_ct.layer_bbox(gate_metal).into_rect();
+                    let mut port = CellPort::new(format!("gate_{i}"));
+                    port.add(gate_metal, Shape::Rect(ct_box));
+                    ctx.add_port(port).unwrap();
+                    gate_pins.push(ct_box);
 
-            let npc_bbox = gate_ct.layer_bbox(npc).into_rect();
-            npc_boxes.push(npc_bbox);
+                    let npc_bbox = gate_ct.layer_bbox(npc).into_rect();
+                    npc_boxes.push(npc_bbox);
 
-            ctx.draw(gate_ct)?;
+                    ctx.draw(gate_ct)?;
+
+                    let top_npc = npc_boxes.last().unwrap();
+                    let npc_merge_rect = Rect::new(
+                        Point::new(npc_boxes[0].p0.x, npc_boxes[0].p0.y),
+                        Point::new(top_npc.p1.x, top_npc.p1.y),
+                    );
+                    ctx.draw(Element {
+                        net: None,
+                        layer: LayerSpec::new(npc, LayerPurpose::Drawing),
+                        inner: Shape::Rect(npc_merge_rect),
+                    })?;
+                }
+            }
+            GateContactStrategy::Merge => {
+                let ct_rect = Rect::from_spans(
+                    Span::with_stop_and_length(poly_rects[0].p0.x, 330),
+                    gate_span,
+                );
+                let gate_ctp = ViaParams::builder()
+                    .layers(poly, gate_metal)
+                    .geometry(ct_rect, ct_rect)
+                    .expand(ViaExpansion::LongerDirection)
+                    .build();
+                ctx.draw_rect(poly, ct_rect);
+                let gate_ct = ctx.instantiate::<Via>(&gate_ctp)?;
+                ctx.draw_ref(&gate_ct)?;
+                let ct_box = gate_ct.layer_bbox(gate_metal).into_rect();
+                let mut port = CellPort::new("gate");
+                port.add(gate_metal, Shape::Rect(ct_box));
+                ctx.add_port(port).unwrap()
+            }
+            _ => unimplemented!(),
         }
-
-        let top_npc = npc_boxes.last().unwrap();
-        let npc_merge_rect = Rect::new(
-            Point::new(npc_boxes[0].p0.x, npc_boxes[0].p0.y),
-            Point::new(top_npc.p1.x, top_npc.p1.y),
-        );
-        ctx.draw(Element {
-            net: None,
-            layer: LayerSpec::new(npc, LayerPurpose::Drawing),
-            inner: Shape::Rect(npc_merge_rect),
-        })?;
 
         // Add source/drain contacts
         let mut cy = y0;

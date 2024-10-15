@@ -39,6 +39,8 @@ pub enum GateContactStrategy {
     Alternate,
     /// ABBA placement
     Abba,
+    /// Merge all contacts on one side (usually the left)
+    Merge,
     /// Other; effect depends on layout generator
     Other(String),
 }
