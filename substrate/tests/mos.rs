@@ -12,20 +12,20 @@ fn test_sky130_mos_nand2() {
         &LayoutMosParams {
             skip_sd_metal: vec![vec![]; 2],
             deep_nwell: false,
-            contact_strategy: substrate::pdk::mos::GateContactStrategy::SingleSide,
+            contact_strategy: substrate::pdk::mos::GateContactStrategy::Merge,
             devices: vec![
                 MosParams {
                     w: 200_000,
                     l: 150,
                     m: 1,
-                    nf: 2,
+                    nf: 5,
                     id: MosId::new(0),
                 },
                 MosParams {
                     w: 100_000,
                     l: 150,
                     m: 1,
-                    nf: 2,
+                    nf: 5,
                     id: MosId::new(1),
                 },
             ],
