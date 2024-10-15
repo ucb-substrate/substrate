@@ -167,8 +167,11 @@ impl Sky130Pdk {
                 let line = gate_bbox.height();
                 let space = POLY_SPACE;
                 let total_contact_len = nf as i64 * line + (nf as i64 - 1) * space;
-                // TODO: Should be gridded.
-                let contact_span = Span::from_center_span(gate_span.center(), total_contact_len);
+                let contact_span = Span::from_center_span_gridded(
+                    gate_span.center(),
+                    total_contact_len,
+                    ctx.pdk().layout_grid(),
+                );
 
                 let mut npc_boxes = Vec::new();
 
