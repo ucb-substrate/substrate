@@ -161,8 +161,8 @@ impl Sky130Pdk {
         match params.contact_strategy {
             GateContactStrategy::SingleSide => {
                 assert!(
-                    nf <= 2,
-                    "can only contact nf=2 transistors on a single side"
+                    nf <= 3,
+                    "can only contact nf=3 transistors on a single side"
                 );
                 let line = gate_bbox.height();
                 let space = POLY_SPACE;
