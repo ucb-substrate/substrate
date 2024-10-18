@@ -35,6 +35,8 @@ pub struct LayoutMosParams {
 pub enum GateContactStrategy {
     /// Attempt to place all contacts on one side (usually the left)
     SingleSide,
+    /// Attempt to place contacts on both sides of the transistor.
+    BothSides,
     /// Alternate contact placement
     Alternate,
     /// ABBA placement

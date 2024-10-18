@@ -10,7 +10,7 @@ use substrate::layout::elements::via::{Via, ViaExpansion, ViaParams};
 use substrate::layout::layers::selector::Selector;
 use substrate::layout::layers::{LayerBoundBox, LayerPurpose, LayerSpec};
 use substrate::pdk::mos::spec::MosKind;
-use substrate::pdk::mos::LayoutMosParams;
+use substrate::pdk::mos::{GateContactStrategy, LayoutMosParams};
 
 use crate::constants::{
     DIFF_EDGE_TO_GATE, DIFF_NSDM_ENCLOSURE, DIFF_NWELL_ENCLOSURE, DIFF_PSDM_ENCLOSURE, DIFF_SPACE,
@@ -129,8 +129,6 @@ impl Sky130Pdk {
         let gate_ct = ctx.instantiate::<Via>(&gate_ctp)?;
         let gate_bbox = gate_ct.layer_bbox(poly);
 
-        let mut gate_pins = Vec::with_capacity(nf as usize);
-
         let xpoly = x0 - POLY_DIFF_EXTENSION;
         let mut ypoly = y0 + DIFF_EDGE_TO_GATE;
         let wpoly = cx - xpoly + POLY_DIFF_EXTENSION;
@@ -141,9 +139,13 @@ impl Sky130Pdk {
         let poly_fudge_x = 60;
         let mut poly_rects = Vec::with_capacity(nf as usize);
         for _ in 0..nf {
+            let mut p1x = xpoly + wpoly;
+            if params.contact_strategy == GateContactStrategy::BothSides {
+                p1x += poly_fudge_x;
+            };
             let rect = Rect {
                 p0: Point::new(xpoly - poly_fudge_x, ypoly),
-                p1: Point::new(xpoly + wpoly, ypoly + params.length()),
+                p1: Point::new(p1x, ypoly + params.length()),
             };
             poly_rects.push(rect);
             ctx.draw(Element {
@@ -152,8 +154,7 @@ impl Sky130Pdk {
                 inner: Shape::Rect(rect),
             })?;
 
-            ypoly += params.length();
-            ypoly += FINGER_SPACE;
+            ypoly += params.length() + FINGER_SPACE;
         }
 
         // Place gate contacts and create gate ports
@@ -165,6 +166,7 @@ impl Sky130Pdk {
         let contact_span = Span::from_center_span(gate_span.center(), total_contact_len);
 
         let mut npc_boxes = Vec::new();
+        let mut npc_boxes_x = Vec::new();
 
         for i in 0..nf as i64 {
             let empty_rect = Rect::new(Point::zero(), Point::zero());
@@ -186,7 +188,20 @@ impl Sky130Pdk {
             let mut port = CellPort::new(format!("gate_{i}"));
             port.add(gate_metal, Shape::Rect(ct_box));
             ctx.add_port(port).unwrap();
-            gate_pins.push(ct_box);
+
+            if params.contact_strategy == GateContactStrategy::BothSides {
+                let mut gate_ct = ctx.instantiate::<Via>(&gate_ctp)?;
+                let ofsx = rect.p1.x - gate_bbox.p0.x;
+                let ct_ofs = Point::new(ofsx, ofsy);
+                gate_ct.translate(ct_ofs);
+                let ct_box = gate_ct.layer_bbox(gate_metal).into_rect();
+                let mut port = CellPort::new(format!("gate_{i}_x"));
+                port.add(gate_metal, Shape::Rect(ct_box));
+                ctx.add_port(port).unwrap();
+                let npc_bbox = gate_ct.layer_bbox(npc).into_rect();
+                npc_boxes_x.push(npc_bbox);
+                ctx.draw(gate_ct)?;
+            }
 
             let npc_bbox = gate_ct.layer_bbox(npc).into_rect();
             npc_boxes.push(npc_bbox);
@@ -194,16 +209,21 @@ impl Sky130Pdk {
             ctx.draw(gate_ct)?;
         }
 
-        let top_npc = npc_boxes.last().unwrap();
-        let npc_merge_rect = Rect::new(
-            Point::new(npc_boxes[0].p0.x, npc_boxes[0].p0.y),
-            Point::new(top_npc.p1.x, top_npc.p1.y),
-        );
-        ctx.draw(Element {
-            net: None,
-            layer: LayerSpec::new(npc, LayerPurpose::Drawing),
-            inner: Shape::Rect(npc_merge_rect),
-        })?;
+        for boxes in [npc_boxes, npc_boxes_x] {
+            if boxes.is_empty() {
+                continue;
+            }
+            let top_npc = boxes.last().unwrap();
+            let npc_merge_rect = Rect::new(
+                Point::new(boxes[0].p0.x, boxes[0].p0.y),
+                Point::new(top_npc.p1.x, top_npc.p1.y),
+            );
+            ctx.draw(Element {
+                net: None,
+                layer: LayerSpec::new(npc, LayerPurpose::Drawing),
+                inner: Shape::Rect(npc_merge_rect),
+            })?;
+        }
 
         // Add source/drain contacts
         let mut cy = y0;
