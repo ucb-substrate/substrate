@@ -1007,6 +1007,21 @@ impl CellPort {
         }
     }
 
+    pub fn with_shapes(
+        id: impl Into<PortId>,
+        layer: LayerKey,
+        shapes: impl IntoIterator<Item = Shape>,
+    ) -> Self {
+        let mut map = HashMap::with_capacity(1);
+        let mut entry = map.entry(layer).or_insert_with(Vec::new);
+        entry.extend(shapes);
+        Self {
+            id: id.into(),
+            shapes: map,
+            must_connect: Default::default(),
+        }
+    }
+
     pub fn with_element(id: impl Into<PortId>, elem: Element) -> Self {
         let mut shapes = HashMap::with_capacity(1);
         shapes.insert(elem.layer.layer(), vec![elem.into_inner()]);
@@ -1034,6 +1049,11 @@ impl CellPort {
 
     pub fn with_id(mut self, id: impl Into<PortId>) -> Self {
         self.set_id(id);
+        self
+    }
+
+    pub fn must_connect(mut self, must_connect: impl Into<MustConnect>) -> Self {
+        self.set_must_connect(must_connect);
         self
     }
 
