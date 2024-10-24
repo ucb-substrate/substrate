@@ -514,7 +514,7 @@ impl GreedyAbstractRouter {
                 return;
             }
             State::Blocked { net: other } => {
-                if net != *other {
+                if net == *other {
                     State::Blocked { net }
                 } else {
                     State::Blocked { net: None }
