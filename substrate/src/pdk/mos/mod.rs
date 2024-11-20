@@ -33,13 +33,17 @@ pub struct LayoutMosParams {
 /// Specifies the geometric arrangement of contacts for transistor gates.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum GateContactStrategy {
-    /// Attempt to place all contacts on one side (usually the left)
+    /// Attempt to place all contacts on one side (usually the left).
     SingleSide,
-    /// Alternate contact placement
+    /// Attempt to place contacts on both sides of the transistor.
+    BothSides,
+    /// Alternate contact placement.
     Alternate,
-    /// ABBA placement
+    /// ABBA placement.
     Abba,
-    /// Other; effect depends on layout generator
+    /// Merge all contacts on one side (usually the left).
+    Merge,
+    /// Other; effect depends on layout generator.
     Other(String),
 }
 

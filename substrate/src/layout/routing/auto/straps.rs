@@ -17,6 +17,7 @@ pub struct RoutedStraps {
     targets: HashMap<LayerKey, Vec<Target>>,
 }
 
+#[derive(Debug, Default, Clone)]
 pub struct PlacedStraps {
     inner: HashMap<LayerKey, Vec<Strap>>,
 }

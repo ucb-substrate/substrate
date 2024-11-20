@@ -43,8 +43,20 @@ impl<'a> ArrayTilerBuilder<'a> {
     }
 
     #[inline]
+    pub fn space(&mut self, space: i64) -> &mut Self {
+        self.space = space;
+        self
+    }
+
+    #[inline]
     pub fn alt_mode(&mut self, mode: impl Into<AlignMode>) -> &mut Self {
         self.alt_mode = Some(mode.into());
+        self
+    }
+
+    #[inline]
+    pub fn alt_space(&mut self, alt_space: i64) -> &mut Self {
+        self.alt_space = alt_space;
         self
     }
 
