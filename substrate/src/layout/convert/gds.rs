@@ -912,9 +912,6 @@ impl<'a> GdsImporter<'a> {
                             }
                         }
                     }
-                    if !has_geometry {
-                        println!("Warning: Importing empty port: {}", port.name());
-                    }
                     cell.merge_port(port);
                 }
             } else {
