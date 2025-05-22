@@ -42,6 +42,11 @@ impl PreSimCtx {
         self
     }
 
+    pub fn set_flags(&mut self, flags: impl Into<String>) -> &mut Self {
+        self.input.opts.flags = Some(flags.into());
+        self
+    }
+
     pub fn include_lib(
         &mut self,
         path: impl Into<PathBuf>,
