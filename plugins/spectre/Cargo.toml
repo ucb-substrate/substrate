@@ -12,7 +12,7 @@ substrate = { path = "../../substrate" }
 tera = "1.18.1"
 spice_rawfile = { path = "../spice_rawfile" }
 anyhow = "1.0.70"
-psfparser = { git = "https://github.com/rahulk29/psfparser.git", branch = "master" }
+psfparser = { git = "https://github.com/ucb-substrate/substrate2", branch = "main" }
 log = "0.4"
 
 [dev-dependencies]

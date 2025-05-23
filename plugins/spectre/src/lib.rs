@@ -71,7 +71,7 @@ fn dc_conv(parsed_data: PsfDcData) -> DcData {
             PsfDcData::Sweep(data) => HashMap::from_iter(
                 data.signals
                     .into_iter()
-                    .chain([data.param].into_iter())
+                    .chain([(data.sweep_var, data.sweep_values)].into_iter())
                     .map(|(k, v)| {
                         (
                             k,
@@ -178,8 +178,8 @@ impl<'a> SpectreOutputParser<'a> {
                 Ok(match analysis.analysis_type() {
                     AnalysisType::Ac => ac_conv(PsfAcData::from_ascii(&ast)).into(),
                     AnalysisType::Tran => tran_conv(TransientData::from_ascii(&ast)).into(),
-                    AnalysisType::Dc => dc_conv(PsfDcData::from_ast(&ast)).into(),
-                    AnalysisType::Op => op_conv(PsfDcData::from_ast(&ast)).into(),
+                    AnalysisType::Dc => dc_conv(PsfDcData::from_ascii(&ast)).into(),
+                    AnalysisType::Op => op_conv(PsfDcData::from_ascii(&ast)).into(),
                     _ => bail!("spectre plugin only supports transient, ac, and dc simulations"),
                 })
             }
