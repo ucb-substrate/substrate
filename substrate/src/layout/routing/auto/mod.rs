@@ -318,6 +318,29 @@ impl GreedyRouter {
         self.inner.block_span(span);
     }
 
+    /// Makes `rect`'s grid points unavailable to every net except `net`.
+    ///
+    /// Unlike [`Self::occupy`], this asserts no metal: the points do not join the
+    /// net's connectivity and nothing may be routed to them. It is for grid points
+    /// that a net's metal lies too close to for anything else to use legally, but
+    /// which that net's own metal does not cover.
+    ///
+    /// Blocking a point that two different nets both claim leaves it blocked for
+    /// neither, which is the desired outcome - no net can route there without
+    /// violating spacing against one of them. Points that are already occupied are
+    /// left alone, as with [`Self::block`].
+    pub fn block_for_net(
+        &mut self,
+        layer: LayerKey,
+        rect: Rect,
+        net: &str,
+    ) -> crate::error::Result<()> {
+        let net = self.get_net(net);
+        let span = self.expand_to_pos_span(layer, rect);
+        self.inner.block_span_for_net(span, net);
+        Ok(())
+    }
+
     pub fn occupy(&mut self, layer: LayerKey, rect: Rect, net: &str) -> crate::error::Result<()> {
         let net = self.get_net(net);
         let span = self.expand_to_pos_span(layer, rect);
