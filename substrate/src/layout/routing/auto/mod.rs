@@ -210,7 +210,7 @@ impl GreedyRouter {
             }
             let runs: Vec<(abs::Layer, AbstractRoute)> = subroute
                 .into_iter()
-                .group_by(|n| n.layer)
+                .chunk_by(|n| n.layer)
                 .into_iter()
                 .map(|(layer, group)| (layer, group.into_iter().collect::<AbstractRoute>()))
                 .collect();

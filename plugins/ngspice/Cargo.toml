@@ -9,6 +9,6 @@ description = "Substrate plugin for Ngspice"
 lazy_static = "1.4.0"
 serde = { version = "1.0.159", features = ["derive"] }
 substrate = { path = "../../substrate" }
-tera = "1.18.1"
+tera = { version = "2.4.0", features = ["glob_fs"] }
 spice_rawfile = { path = "../spice_rawfile" }
 anyhow = "1.0.70"

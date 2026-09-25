@@ -114,7 +114,7 @@ impl<'a> GridTiler<'a> {
 
         for i in 0..rows {
             for j in 0..cols {
-                if let Some(tile) = self.tiles[i][j].as_ref() {
+                if let Some(tile) = self.tiles[(i, j)].as_ref() {
                     let pos = self.pos_ll(j, rows - i - 1);
                     let pt = pos - tile.bbox().p0;
                     let mut tgroup = tile.draw_ref()?;
@@ -148,7 +148,7 @@ impl<'a> GridTiler<'a> {
 
         for i in 0..rows {
             for j in 0..cols {
-                if let Some(tile) = self.tiles[i][j].as_ref() {
+                if let Some(tile) = self.tiles[(i, j)].as_ref() {
                     let pos = self.pos_ll(j, rows - i - 1);
                     let pt = pos - tile.bbox().p0;
                     let mut tgroup = tile.draw_ref()?;
@@ -168,7 +168,7 @@ impl<'a> GridTiler<'a> {
     /// This function panics if `i` or `j` are out of bounds,
     /// or if no [`Tile`] was specified at the given position.
     pub fn tile(&self, i: usize, j: usize) -> &Tile<'_> {
-        self.tiles[i][j].as_ref().unwrap()
+        self.tiles[(i, j)].as_ref().unwrap()
     }
 
     /// Gets the [`Rect`] representing the cell in row `i`, column `j`.

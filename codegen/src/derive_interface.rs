@@ -24,8 +24,11 @@ pub(crate) fn derive_interface_inner(item: TokenStream) -> TokenStream {
                 .named
                 .into_iter()
                 .map(|field| {
-                    let is_input = field.attrs.iter().any(|attr| attr.path.is_ident("input"));
-                    let is_output = field.attrs.iter().any(|attr| attr.path.is_ident("output"));
+                    let is_input = field.attrs.iter().any(|attr| attr.path().is_ident("input"));
+                    let is_output = field
+                        .attrs
+                        .iter()
+                        .any(|attr| attr.path().is_ident("output"));
                     if is_input ^ is_output {
                         Ok((field, is_input))
                     } else {

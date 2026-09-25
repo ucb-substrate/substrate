@@ -10,12 +10,11 @@ pub(crate) const TEMPLATES_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/te
 
 lazy_static! {
     pub(crate) static ref TEMPLATES: Tera = {
-        match Tera::new(&format!("{TEMPLATES_PATH}/*")) {
-            Ok(t) => t,
-            Err(e) => {
-                panic!("Encountered errors while parsing Tera templates: {e}");
-            }
+        let mut tera = Tera::new();
+        if let Err(e) = tera.load_from_glob(&format!("{TEMPLATES_PATH}/*")) {
+            panic!("Encountered errors while parsing Tera templates: {e}");
         }
+        tera
     };
 }
 
@@ -29,7 +28,7 @@ pub(crate) struct NetlistCtx<'a> {
 
 pub(crate) fn render_netlist(ctx: NetlistCtx<'_>, work_dir: impl AsRef<Path>) -> Result<PathBuf> {
     let path = work_dir.as_ref().join("netlist.spice");
-    let ctx = Context::from_serialize(ctx)
+    let ctx = Context::from_serialize(&ctx)
         .map_err(|e| ErrorSource::Internal(format!("template error: {e}")))?;
 
     let mut file = std::fs::File::create(&path)?;

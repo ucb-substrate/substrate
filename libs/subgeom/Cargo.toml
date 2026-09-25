@@ -9,5 +9,5 @@ edition = "2021"
 serde = { version = "1", features = ["derive", "rc"] }
 enum_dispatch = "0.3.11"
 array_map = { version = "0.4", features = ["derive", "serde", "std"] }
-thiserror = "1.0.40"
+thiserror = "2.0.20"
 gds21 = { path = "../../libs/gds21" }

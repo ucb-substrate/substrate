@@ -6,8 +6,8 @@ use nom::character::complete::{line_ending, multispace0, space0, space1};
 use nom::character::streaming::char;
 use nom::combinator::opt;
 use nom::multi::{many0, many1};
-use nom::sequence::{delimited, pair, preceded, tuple};
-use nom::IResult;
+use nom::sequence::{delimited, pair, preceded};
+use nom::{IResult, Parser};
 use serde::Serialize;
 
 #[cfg(test)]
@@ -49,66 +49,67 @@ fn within_line_space1(input: &str) -> IResult<&str, ()> {
 }
 
 fn line_continuation1(input: &str) -> IResult<&str, ()> {
-    let (input, _) = tuple((
+    let (input, _) = (
         space0,
         opt(line_comment),
         line_ending,
         space0,
         char('+'),
         space0,
-    ))(input)?;
+    )
+        .parse(input)?;
     Ok((input, ()))
 }
 
 fn many_line_continuation1(input: &str) -> IResult<&str, ()> {
-    let (input, _) = many1(line_continuation1)(input)?;
+    let (input, _) = many1(line_continuation1).parse(input)?;
     Ok((input, ()))
 }
 
 fn spice_space1(input: &str) -> IResult<&str, ()> {
-    let (input, _) = alt((many_line_continuation1, within_line_space1))(input)?;
+    let (input, _) = alt((many_line_continuation1, within_line_space1)).parse(input)?;
     Ok((input, ()))
 }
 
 fn line_comment(input: &str) -> IResult<&str, ()> {
-    let (input, _) = tuple((space0, char(';'), take_till(is_newline)))(input)?;
+    let (input, _) = (space0, char(';'), take_till(is_newline)).parse(input)?;
     Ok((input, ()))
 }
 
 fn ident(input: &str) -> IResult<&str, &str> {
-    take_till1(is_space_or_line)(input)
+    take_till1(is_space_or_line).parse(input)
 }
 
 fn subckt_ports(input: &str) -> IResult<&str, Vec<&str>> {
-    many0(preceded(spice_space1, ident))(input)
+    many0(preceded(spice_space1, ident)).parse(input)
 }
 
 fn subckt_name(input: &str) -> IResult<&str, &str> {
-    preceded(spice_space1, ident)(input)
+    preceded(spice_space1, ident).parse(input)
 }
 
 fn subckt_line(input: &str) -> IResult<&str, SpiceLine<'_>> {
     let (input, (_, name, ports)) =
-        tuple((tag_no_case(".subckt"), subckt_name, subckt_ports))(input)?;
+        (tag_no_case(".subckt"), subckt_name, subckt_ports).parse(input)?;
 
     Ok((input, SpiceLine::Subckt(SubcktLine { name, ports })))
 }
 
 fn comment_line(input: &str) -> IResult<&str, SpiceLine<'_>> {
     let (input, (_, _, comment, _)) =
-        tuple((space0, tag_no_case("*"), take_till(is_newline), line_ending))(input)?;
+        (space0, tag_no_case("*"), take_till(is_newline), line_ending).parse(input)?;
     Ok((input, SpiceLine::Comment(comment.trim())))
 }
 
 fn other_line(input: &str) -> IResult<&str, SpiceLine<'_>> {
-    let (input, _) = pair(ident, many0(preceded(ident, spice_space1)))(input)?;
+    let (input, _) = pair(ident, many0(preceded(ident, spice_space1))).parse(input)?;
     Ok((input, SpiceLine::Other))
 }
 
 fn spice_line(input: &str) -> IResult<&str, SpiceLine<'_>> {
-    alt((subckt_line, comment_line, other_line))(input)
+    alt((subckt_line, comment_line, other_line)).parse(input)
 }
 
 pub(crate) fn parse_spice(input: &str) -> IResult<&str, Vec<SpiceLine<'_>>> {
-    many0(delimited(multispace0, spice_line, multispace0))(input)
+    many0(delimited(multispace0, spice_line, multispace0)).parse(input)
 }

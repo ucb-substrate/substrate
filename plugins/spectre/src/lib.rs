@@ -22,11 +22,13 @@ pub const TOP_NETLIST_NAME: &str = "sim.top.spice";
 pub const BASE_ANALYSIS_PREFIX: &str = "analysis";
 
 lazy_static! {
-    pub static ref TEMPLATES: Tera =
-        match Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/*")) {
-            Ok(t) => t,
-            Err(e) => panic!("Error parsing templates: {e}"),
-        };
+    pub static ref TEMPLATES: Tera = {
+        let mut tera = Tera::new();
+        if let Err(e) = tera.load_from_glob(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/*")) {
+            panic!("Error parsing templates: {e}");
+        }
+        tera
+    };
 }
 
 fn tran_conv(data: TransientData) -> TranData {
@@ -354,7 +356,7 @@ fn write_run_script(paths: &Paths, input: &SimInput) -> Result<()> {
         format: output_format_name(input, &input.output_format),
         flags: &flags(input),
     };
-    let ctx = Context::from_serialize(ctx)?;
+    let ctx = Context::from_serialize(&ctx)?;
 
     let mut f = File::create(&paths.run_script_path)?;
     TEMPLATES.render_to("run_sim.sh", &ctx, &mut f)?;

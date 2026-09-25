@@ -510,6 +510,7 @@ pub struct GdsProperty {
 /// ```
 ///
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsPath {
     // Required Fields
@@ -559,6 +560,7 @@ pub struct GdsPath {
 /// ```
 ///
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsBoundary {
     // Required Fields
@@ -594,6 +596,7 @@ pub struct GdsBoundary {
 /// ```
 ///
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsStructRef {
     // Required Fields
@@ -628,6 +631,7 @@ pub struct GdsStructRef {
 /// ```
 ///
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsArrayRef {
     // Required Fields
@@ -663,6 +667,7 @@ pub struct GdsArrayRef {
 /// TEXTTYPE [PRESENTATION] [PATHTYPE] [WIDTH] [<strans>] XY STRING
 /// ```
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsTextElem {
     // Required Fields
@@ -708,6 +713,7 @@ pub struct GdsTextElem {
 /// ```
 ///
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsNode {
     // Required Fields
@@ -738,6 +744,7 @@ pub struct GdsNode {
 /// ```
 ///
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsBox {
     // Required Fields
@@ -837,6 +844,7 @@ impl Default for GdsDateTimes {
 /// ```
 ///
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsStruct {
     /// Struct Name
@@ -892,6 +900,7 @@ impl GdsStruct {
 /// ```
 ///
 #[derive(Default, Clone, Builder, Debug, Deserialize, Serialize, PartialEq)]
+#[builder(build_fn(error = "GdsError"))]
 #[builder(pattern = "owned", setter(into), private)]
 pub struct GdsLibrary {
     // Required fields
@@ -1100,6 +1109,11 @@ impl From<std::str::Utf8Error> for GdsError {
 impl From<String> for GdsError {
     fn from(e: String) -> Self {
         GdsError::Str(e)
+    }
+}
+impl From<derive_builder::UninitializedFieldError> for GdsError {
+    fn from(e: derive_builder::UninitializedFieldError) -> Self {
+        GdsError::Str(e.to_string())
     }
 }
 impl From<&str> for GdsError {

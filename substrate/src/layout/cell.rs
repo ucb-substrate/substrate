@@ -9,7 +9,7 @@ use std::sync::Arc;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use slotmap::new_key_type;
-use state::Container;
+use state::TypeMap;
 use subgeom::bbox::{Bbox, BoundBox};
 use subgeom::orientation::Orientation;
 use subgeom::transform::{Transform, Transformation, Translate};
@@ -55,7 +55,7 @@ pub struct Cell {
     cache: Option<Cache>,
 
     /// User-defined metadata.
-    metadata: Container![Send + Sync],
+    metadata: TypeMap![Send + Sync],
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
