@@ -17,7 +17,7 @@ impl MosDb {
         Ok(Self { devices })
     }
 
-    pub fn query(&self, query: Query) -> Result<QueryResult> {
+    pub fn query(&self, query: Query) -> Result<QueryResult<'_>> {
         self.devices
             .values()
             .find(|&m| m.supply == query.supply && m.kind == query.kind && m.flavor == query.flavor)
@@ -42,11 +42,11 @@ impl MosDb {
             .ok_or(ErrorSource::DeviceNotFound.into())
     }
 
-    pub fn default_nmos(&self) -> Result<QueryResult> {
+    pub fn default_nmos(&self) -> Result<QueryResult<'_>> {
         self.query(Query::builder().kind(MosKind::Nmos).build().unwrap())
     }
 
-    pub fn default_pmos(&self) -> Result<QueryResult> {
+    pub fn default_pmos(&self) -> Result<QueryResult<'_>> {
         self.query(Query::builder().kind(MosKind::Pmos).build().unwrap())
     }
 }

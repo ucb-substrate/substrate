@@ -374,10 +374,7 @@ impl AbstractNetInfo {
     }
 
     fn add_to_group(&mut self, pos: Pos, conn_group: ConnectionGroup) {
-        self.conn_groups
-            .entry(conn_group)
-            .or_insert(HashSet::new())
-            .insert(pos);
+        self.conn_groups.entry(conn_group).or_default().insert(pos);
     }
 
     fn pos_in_group(&self, conn_group: ConnectionGroup) -> Option<Vec<Pos>> {
@@ -734,7 +731,9 @@ impl GreedyAbstractRouter {
         // Ensure that next position is on the grid for its corresponding layer.
         let next_pos = pos.next(action);
         let next_layer_info = self.layer_info(next_pos.layer);
-        next_pos.coord(!next_layer_info.dir) % next_layer_info.grid_space == 0
+        next_pos
+            .coord(!next_layer_info.dir)
+            .is_multiple_of(next_layer_info.grid_space)
     }
 
     fn span_next(&self, span: PosSpan) -> Vec<Node> {
@@ -792,7 +791,7 @@ fn round_down(x: usize, grid: usize) -> usize {
 }
 
 fn round_up(x: usize, grid: usize) -> usize {
-    ((x + grid - 1) / grid) * grid
+    x.div_ceil(grid) * grid
 }
 
 #[cfg(test)]

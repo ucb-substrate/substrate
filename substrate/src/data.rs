@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use serde::{Deserialize, Serialize};
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 use crate::component::{Component, View};
 use crate::deps::arcstr::ArcStr;
@@ -239,16 +239,18 @@ impl SubstrateConfigBuilder {
 
 impl SubstrateCtx {
     #[inline]
-    pub(crate) fn read(&self) -> RwLockReadGuard<SubstrateData> {
+    pub(crate) fn read(&self) -> RwLockReadGuard<'_, SubstrateData> {
         self.inner.read().unwrap()
     }
 
     #[inline]
-    pub(crate) fn write(&self) -> RwLockWriteGuard<SubstrateData> {
+    pub(crate) fn write(&self) -> RwLockWriteGuard<'_, SubstrateData> {
         self.inner.write().unwrap()
     }
 
     #[inline]
+    // `SubstrateData` is not `Send`/`Sync`; `Arc` is kept so the public type doesn't change.
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn from_config(cfg: SubstrateConfig) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(SubstrateData::from_config(cfg)?)),
@@ -859,7 +861,7 @@ impl SubstrateCtx {
     where
         T: Testbench,
     {
-        let work_dir = TempDir::new("subsim")?;
+        let work_dir = TempDir::with_prefix("subsim")?;
         let work_dir = work_dir.path();
         self.write_simulation::<T>(params, work_dir)
     }

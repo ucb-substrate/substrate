@@ -789,7 +789,7 @@ impl<'a> GdsImporter<'a> {
     fn import_and_add(&mut self, strukt: &gds21::GdsStruct) -> LayoutResult<()> {
         let name = &strukt.name;
         // Check whether we're already defined, and bail if so
-        if self.cell_map.get(name).is_some() {
+        if self.cell_map.contains_key(name) {
             return self.fail(format!("Cell {name} defined multiple times in GDS file"));
         }
 
@@ -877,7 +877,6 @@ impl<'a> GdsImporter<'a> {
             if purp == &LayerPurpose::Label || purp == &LayerPurpose::Pin {
                 if let Some(pin_spec) = pin_spec {
                     let mut port = CellPort::new(&net_name);
-                    let mut has_geometry = false;
                     if let Some(layer) = layers.get_mut(&text_spec.layer()) {
                         // Layer exists in geometry; see which elements intersect with this text
                         for ekey in layer.iter() {
@@ -898,13 +897,12 @@ impl<'a> GdsImporter<'a> {
                                             pname,
                                             textelem.string.clone(),
                                             textelem.layer,
-                                            &strukt.name,
+                                            strukt.name,
                                         );
                                     }
                                 }
                                 elem.net = Some(ArcStr::from(&net_name));
                                 port.add(pin_spec.layer(), elem.inner.clone());
-                                has_geometry = true;
 
                                 // This pin shape is stored in a port.
                                 // No need to also include it as a regular element.

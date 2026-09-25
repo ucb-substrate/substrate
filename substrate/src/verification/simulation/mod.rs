@@ -482,7 +482,7 @@ impl TranData {
         self.data.get(name)
     }
 
-    pub fn waveform(&self, name: &str) -> Option<SharedWaveform> {
+    pub fn waveform(&self, name: &str) -> Option<SharedWaveform<'_>> {
         let x = self.data.get(name)?;
         Some(SharedWaveform::from_signal(&self.time, x))
     }

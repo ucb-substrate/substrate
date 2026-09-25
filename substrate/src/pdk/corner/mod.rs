@@ -14,7 +14,6 @@ new_key_type! {
     pub struct CornerKey;
 }
 
-///
 #[derive(Debug, Clone, PartialEq, Builder, Serialize, Deserialize)]
 pub struct Pvt {
     /// The process corner.

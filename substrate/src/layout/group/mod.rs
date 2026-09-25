@@ -197,7 +197,7 @@ impl Group {
     pub fn port(
         &self,
         id: impl Into<PortId>,
-    ) -> std::result::Result<TransformedPort<CellPort>, PortError> {
+    ) -> std::result::Result<TransformedPort<'_, CellPort>, PortError> {
         let port = self.ports.port(id)?;
         Ok(TransformedPort {
             transformation: self.transformation(),

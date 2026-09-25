@@ -122,7 +122,7 @@ fn parse_f64(input: &[u8]) -> Result<f64, Err<Error<&[u8]>>> {
     Ok(value)
 }
 
-fn variable(input: &[u8]) -> IResult<&[u8], Variable> {
+fn variable(input: &[u8]) -> IResult<&[u8], Variable<'_>> {
     let value = take_till1(is_space_or_line);
     // In AC analysis, may have a `grid=X` declaration
     let grid = opt(pair(space1, &value));
@@ -143,7 +143,7 @@ fn variable(input: &[u8]) -> IResult<&[u8], Variable> {
     Ok((input, Variable { idx, name, unit }))
 }
 
-fn variables(input: &[u8]) -> IResult<&[u8], Vec<Variable>> {
+fn variables(input: &[u8]) -> IResult<&[u8], Vec<Variable<'_>>> {
     let (input, _) = tuple((tag_no_case("Variables:"), space0, line_ending))(input)?;
     let (input, vars) = many0(variable)(input)?;
     Ok((input, vars))
@@ -243,7 +243,7 @@ fn complex_data(input: &[u8], vars: usize, points: usize) -> IResult<&[u8], Data
     ))(input)
 }
 
-fn analysis(input: &[u8]) -> IResult<&[u8], Analysis> {
+fn analysis(input: &[u8]) -> IResult<&[u8], Analysis<'_>> {
     let (input, title) = header(input, "Title: ")?;
     let (input, date) = header(input, "Date: ")?;
     let (input, plotname) = header(input, "Plotname: ")?;
@@ -275,6 +275,6 @@ fn analysis(input: &[u8]) -> IResult<&[u8], Analysis> {
     ))
 }
 
-pub(crate) fn analyses(input: &[u8]) -> IResult<&[u8], Vec<Analysis>> {
+pub(crate) fn analyses(input: &[u8]) -> IResult<&[u8], Vec<Analysis<'_>>> {
     many0(analysis)(input)
 }

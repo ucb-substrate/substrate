@@ -50,7 +50,7 @@ impl BitSignal {
     }
 
     #[inline]
-    pub fn from_u128(mut value: u128, width: usize) -> Self {
+    pub fn from_u128(value: u128, width: usize) -> Self {
         assert!(width <= 128);
         Self::from_u128_padded(value, width)
     }

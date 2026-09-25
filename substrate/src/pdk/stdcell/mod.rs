@@ -209,20 +209,20 @@ impl StdCellLibEntry {
     }
 
     #[inline]
-    pub fn cells(&self) -> impl Iterator<Item = StdCellRef> + '_ {
+    pub fn cells(&self) -> impl Iterator<Item = StdCellRef<'_>> + '_ {
         self.data
             .cells()
             .map(|cell| StdCellRef::new(self.id(), cell))
     }
 
-    pub fn try_cell_named(&self, name: &str) -> crate::error::Result<StdCellRef> {
+    pub fn try_cell_named(&self, name: &str) -> crate::error::Result<StdCellRef<'_>> {
         self.data
             .try_cell_named(name)
             .map(|cell| StdCellRef::new(self.id(), cell))
     }
 
     #[inline]
-    pub fn try_cell(&self, id: StdCellKey) -> crate::error::Result<StdCellRef> {
+    pub fn try_cell(&self, id: StdCellKey) -> crate::error::Result<StdCellRef<'_>> {
         self.data
             .try_cell(id)
             .map(|cell| StdCellRef::new(self.id(), cell))
@@ -385,7 +385,7 @@ impl StdCellDb {
             .ok_or_else(|| StdCellError::LibIdNotFound(id).into())
     }
 
-    pub fn try_cell(&self, id: StdCellId) -> crate::error::Result<StdCellRef> {
+    pub fn try_cell(&self, id: StdCellId) -> crate::error::Result<StdCellRef<'_>> {
         let lib = self.try_lib(id.lib)?;
         let cell = lib.try_cell(id.cell)?;
         Ok(cell)
@@ -394,7 +394,7 @@ impl StdCellDb {
     pub fn try_lib_and_cell(
         &self,
         id: StdCellId,
-    ) -> crate::error::Result<(&StdCellLibEntry, StdCellRef)> {
+    ) -> crate::error::Result<(&StdCellLibEntry, StdCellRef<'_>)> {
         let lib = self.try_lib(id.lib)?;
         let cell = lib.try_cell(id.cell)?;
         Ok((lib, cell))

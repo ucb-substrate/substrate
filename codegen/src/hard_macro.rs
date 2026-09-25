@@ -11,11 +11,8 @@ struct HardMacroArgs {
     name: String,
     pdk: String,
     path_fn: Ident,
-    #[darling(default)]
     spice_subckt_name: Option<String>,
-    #[darling(default)]
     gds_cell_name: Option<String>,
-    #[darling(default)]
     toml_fn: Option<Ident>,
 }
 

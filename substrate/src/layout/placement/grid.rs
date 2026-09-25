@@ -167,7 +167,7 @@ impl<'a> GridTiler<'a> {
     ///
     /// This function panics if `i` or `j` are out of bounds,
     /// or if no [`Tile`] was specified at the given position.
-    pub fn tile(&self, i: usize, j: usize) -> &Tile {
+    pub fn tile(&self, i: usize, j: usize) -> &Tile<'_> {
         self.tiles[i][j].as_ref().unwrap()
     }
 

@@ -290,12 +290,12 @@ impl TimingReport {
     pub fn is_failure(&self) -> bool {
         let setup_fail = self
             .setup_checks
-            .get(0)
+            .first()
             .map(|c| c.slack < 0.0)
             .unwrap_or_default();
         let hold_fail = self
             .hold_checks
-            .get(0)
+            .first()
             .map(|c| c.slack < 0.0)
             .unwrap_or_default();
         setup_fail || hold_fail
@@ -349,10 +349,10 @@ impl Log for TimingReport {
             }
         } else {
             info!("All timing constraints satisfied");
-            if let Some(c) = self.setup_checks.get(0) {
+            if let Some(c) = self.setup_checks.first() {
                 info!("Minimum setup slack: {:?}", c);
             }
-            if let Some(c) = self.hold_checks.get(0) {
+            if let Some(c) = self.hold_checks.first() {
                 info!("Minimum hold slack: {:?}", c);
             }
         }
@@ -408,7 +408,7 @@ impl SetupHoldConstraint {
 
 impl PreprocessedNetlist {
     /// Returns a list of the nodes that need to be captured by the simulator.
-    pub(crate) fn timing_constraint_db(&self, pvt: &Pvt) -> TopConstraintDb {
+    pub(crate) fn timing_constraint_db(&self, pvt: &Pvt) -> TopConstraintDb<'_> {
         let mut stack = Vec::new();
         let mut out = Vec::new();
         self.timing_helper(self.top, pvt, &mut stack, &mut out);
@@ -503,7 +503,7 @@ impl<'a> TopConstraintDb<'a> {
     pub(crate) fn named_constraints(
         &mut self,
         netlist: &PreprocessedNetlist,
-    ) -> impl Iterator<Item = &NamedTopConstraint> {
+    ) -> impl Iterator<Item = &NamedTopConstraint<'_>> {
         self.compute_names(netlist);
         self.named_constraints.as_ref().unwrap().iter()
     }
