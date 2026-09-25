@@ -455,7 +455,7 @@ trait Encode {
         }
         self.encode_record(GdsRecord::Layer(box_.layer))?;
         self.encode_record(GdsRecord::BoxType(box_.boxtype))?;
-        self.encode_record(GdsRecord::Xy(GdsPoint::flatten_vec(&box_.xy.to_vec())))?;
+        self.encode_record(GdsRecord::Xy(GdsPoint::flatten_vec(&box_.xy)))?;
         for prop in box_.properties.iter() {
             self.encode_record(GdsRecord::PropAttr(prop.attr))?;
             self.encode_record(GdsRecord::PropValue(prop.value.clone()))?;
@@ -482,6 +482,7 @@ trait Encode {
 /// # GdsRecordList
 /// A largely for-testing implementer of the [Encode] trait,
 /// which collects the generated records into a vector.
+#[allow(dead_code)]
 #[derive(Default, Debug, Deserialize, Serialize)]
 pub struct GdsRecordList {
     pub records: Vec<GdsRecord>,

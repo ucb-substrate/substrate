@@ -23,12 +23,12 @@ where
 
 impl<'a> ParsedSpice<'a> {
     /// Return an iterator over the lines in the parsed SPICE netlist.
-    pub fn lines(&self) -> impl Iterator<Item = &SpiceLine> {
+    pub fn lines(&self) -> impl Iterator<Item = &SpiceLine<'_>> {
         self.lines.iter()
     }
 
     /// Return an iterator over the subcircuit definitions in the netlist.
-    pub fn subcircuits(&self) -> impl Iterator<Item = &SubcktLine> {
+    pub fn subcircuits(&self) -> impl Iterator<Item = &SubcktLine<'_>> {
         self.lines.iter().filter_map(|line| line.subckt())
     }
 
@@ -40,7 +40,7 @@ impl<'a> ParsedSpice<'a> {
     /// If you need to query for multiple subcircuits, you may wish to
     /// collect the [`subcircuits`](ParsedSpice::subcircuits) into a
     /// [`HashMap`](std::collections::HashMap), and query the map instead.
-    pub fn subcircuit_named(&self, name: impl AsRef<str>) -> Option<&SubcktLine> {
+    pub fn subcircuit_named(&self, name: impl AsRef<str>) -> Option<&SubcktLine<'_>> {
         let name = name.as_ref();
         self.subcircuits().find(|ckt| ckt.name == name)
     }

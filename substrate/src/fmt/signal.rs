@@ -117,7 +117,7 @@ fn get_regex(format: BusFmt) -> Regex {
     regex
 }
 
-pub fn parse_bus(text: &str, format: BusFmt) -> std::result::Result<ParsedBus, ParseBusError> {
+pub fn parse_bus(text: &str, format: BusFmt) -> std::result::Result<ParsedBus<'_>, ParseBusError> {
     let re = get_regex(format);
     let caps = re
         .captures(text.trim())

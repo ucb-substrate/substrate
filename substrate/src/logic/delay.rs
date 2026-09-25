@@ -167,14 +167,52 @@ impl LogicPath {
         assert!(opts.max_iter > 0);
 
         let mut lr = opts.lr;
-        for _ in 0..opts.max_iter {
+        // Backtracking: a step that increased the delay is undone and retried at
+        // half the size. A fixed step overshoots on the `res / size` terms near
+        // small sizes. `delay_grad` already returns the delay, so the check is free.
+        let n = self.variables.len();
+        let mut base = vec![0.0; n];
+        let mut base_grad = vec![0.0; n];
+        let mut base_delay = f64::INFINITY;
+        let mut step = lr;
+        let mut iter = 0;
+        while iter < opts.max_iter {
             let mut grad = self.zero_grad();
-            self.delay_grad(&mut grad);
-            for (v, s) in self.variables.iter_mut() {
-                s.value -= lr * grad[v];
+            let delay = self.delay_grad(&mut grad);
+            // The tolerance ignores rounding noise once converged; without it, about
+            // half of all steps near the optimum are rejected for nothing.
+            if delay > base_delay * (1.0 + 1e-9) {
+                step *= 0.5;
+                if step == 0.0 {
+                    self.set_values(&base);
+                    return;
+                }
+            } else {
+                base_delay = delay;
+                for (i, (v, s)) in self.variables.iter().enumerate() {
+                    base[i] = s.value;
+                    base_grad[i] = grad[v];
+                }
+                step = lr;
+                lr *= opts.lr_decay;
+                iter += 1;
             }
+            for (i, s) in self.variables.values_mut().enumerate() {
+                // Project back onto the feasible region. Without this, a variable
+                // pinned at `min_var_value` keeps drifting below it (`value()` hides
+                // this) and cannot recover if its optimum later moves above the bound.
+                s.value = f64::max(base[i] - step * base_grad[i], self.min_var_value);
+            }
+        }
+        // The last step has not been checked yet.
+        if self.delay() > base_delay * (1.0 + 1e-9) {
+            self.set_values(&base);
+        }
+    }
 
-            lr *= opts.lr_decay;
+    fn set_values(&mut self, values: &[f64]) {
+        for (s, &x) in self.variables.values_mut().zip(values) {
+            s.value = x;
         }
     }
 

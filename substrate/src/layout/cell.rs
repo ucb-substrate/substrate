@@ -1013,7 +1013,7 @@ impl CellPort {
         shapes: impl IntoIterator<Item = Shape>,
     ) -> Self {
         let mut map = HashMap::with_capacity(1);
-        let mut entry = map.entry(layer).or_insert_with(Vec::new);
+        let entry = map.entry(layer).or_insert_with(Vec::new);
         entry.extend(shapes);
         Self {
             id: id.into(),
@@ -1446,7 +1446,7 @@ impl Instance {
     pub fn port(
         &self,
         id: impl Into<PortId>,
-    ) -> std::result::Result<TransformedPort<CellPort>, PortError> {
+    ) -> std::result::Result<TransformedPort<'_, CellPort>, PortError> {
         let port = self.cell.port(id)?;
         Ok(TransformedPort {
             transformation: self.transformation(),

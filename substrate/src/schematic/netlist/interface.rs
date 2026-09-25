@@ -23,24 +23,19 @@ pub struct NetlistOpts {
 }
 
 /// An enumeration of supported netlist formats.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Default)]
 pub enum NetlistFormat {
     /// Spectre netlist format.
     Spectre,
     /// Spectre-compatible SPICE netlist format.
     SpectreSpice,
     /// SPICE netlist format.
+    #[default]
     Spice,
     /// NgSpice-compatible SPICE netlist format.
     NgSpice,
     /// A custom netlist format.
     Other(String),
-}
-
-impl Default for NetlistFormat {
-    fn default() -> Self {
-        Self::Spice
-    }
 }
 
 impl Display for NetlistFormat {

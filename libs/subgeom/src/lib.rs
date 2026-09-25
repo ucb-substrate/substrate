@@ -1192,17 +1192,17 @@ impl Rect {
     ///
     /// The exact behavior depends on the provided [`ExpandMode`]:
     /// * [`ExpandMode::All`]: expands the top and bottom edges by `dims.h()`
-    /// and the left and right edges by `dims.w()`.
-    /// Note that the total horizontal expansion is `2 * dims.w()` and the
-    /// total vertical expansion is `2 * dims.h()`.
+    ///   and the left and right edges by `dims.w()`.
+    ///   Note that the total horizontal expansion is `2 * dims.w()` and the
+    ///   total vertical expansion is `2 * dims.h()`.
     /// * [`ExpandMode::LowerLeft`]: expands the lower edge by `dims.h()` and
-    /// the left edge by `dims.w()`.
+    ///   the left edge by `dims.w()`.
     /// * [`ExpandMode::LowerRight`]: expands the lower edge by `dims.h()` and
-    /// the right edge by `dims.w()`.
+    ///   the right edge by `dims.w()`.
     /// * [`ExpandMode::UpperLeft`]: expands the upper edge by `dims.h()` and
-    /// the left edge by `dims.w()`.
+    ///   the left edge by `dims.w()`.
     /// * [`ExpandMode::UpperRight`]: expands the upper edge by `dims.h()` and
-    /// the right edge by `dims.w()`.
+    ///   the right edge by `dims.w()`.
     ///
     /// See [`Dims`] for more information.
     pub fn expand_dims(self, dims: Dims, mode: ExpandMode) -> Self {

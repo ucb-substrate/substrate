@@ -40,7 +40,7 @@ where
     pub fn get(&self, k1: &K1, k2: &K2) -> Option<&V> {
         let i1 = self.k1.partition_point(|k| k < k1);
         let i2 = self.k2.partition_point(|k| k < k2);
-        if k1 < self.k1.get(0)? || k2 < self.k2.get(0)? {
+        if k1 < self.k1.first()? || k2 < self.k2.first()? {
             return None;
         }
         self.values.get(i1)?.get(i2)
@@ -67,7 +67,7 @@ impl FloatLut2 {
             self.k1
                 .iter()
                 .copied()
-                .zip(interp1.into_iter())
+                .zip(interp1)
                 .map(|(k, v)| Key::new(k, v, splines::Interpolation::Linear))
                 .collect(),
         )

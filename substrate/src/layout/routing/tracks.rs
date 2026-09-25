@@ -127,7 +127,7 @@ impl FixedTracks {
         self.len() == 0
     }
 
-    pub fn iter(&self) -> FixedTracksIter {
+    pub fn iter(&self) -> FixedTracksIter<'_> {
         FixedTracksIter { idx: 0, ptr: self }
     }
 }

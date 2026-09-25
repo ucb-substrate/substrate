@@ -70,7 +70,7 @@ impl<'a> NetlistPreprocessor<'a> {
     ///
     /// Does the following:
     /// 1. Makes a list of all modules that are actually used by the top module
-    /// or its submodules.
+    ///    or its submodules.
     /// 2. Rewrites duplicate module names.
     /// 3. Rewrites duplicate instance names within a module.
     fn bfs(&mut self) -> Result<()> {

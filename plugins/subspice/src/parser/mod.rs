@@ -21,7 +21,7 @@ pub enum SpiceLine<'a> {
 }
 
 impl<'a> SpiceLine<'a> {
-    pub fn subckt(&self) -> Option<&SubcktLine> {
+    pub fn subckt(&self) -> Option<&SubcktLine<'_>> {
         match self {
             SpiceLine::Subckt(line) => Some(line),
             _ => None,
@@ -87,28 +87,28 @@ fn subckt_name(input: &str) -> IResult<&str, &str> {
     preceded(spice_space1, ident)(input)
 }
 
-fn subckt_line(input: &str) -> IResult<&str, SpiceLine> {
+fn subckt_line(input: &str) -> IResult<&str, SpiceLine<'_>> {
     let (input, (_, name, ports)) =
         tuple((tag_no_case(".subckt"), subckt_name, subckt_ports))(input)?;
 
     Ok((input, SpiceLine::Subckt(SubcktLine { name, ports })))
 }
 
-fn comment_line(input: &str) -> IResult<&str, SpiceLine> {
+fn comment_line(input: &str) -> IResult<&str, SpiceLine<'_>> {
     let (input, (_, _, comment, _)) =
         tuple((space0, tag_no_case("*"), take_till(is_newline), line_ending))(input)?;
     Ok((input, SpiceLine::Comment(comment.trim())))
 }
 
-fn other_line(input: &str) -> IResult<&str, SpiceLine> {
+fn other_line(input: &str) -> IResult<&str, SpiceLine<'_>> {
     let (input, _) = pair(ident, many0(preceded(ident, spice_space1)))(input)?;
     Ok((input, SpiceLine::Other))
 }
 
-fn spice_line(input: &str) -> IResult<&str, SpiceLine> {
+fn spice_line(input: &str) -> IResult<&str, SpiceLine<'_>> {
     alt((subckt_line, comment_line, other_line))(input)
 }
 
-pub(crate) fn parse_spice(input: &str) -> IResult<&str, Vec<SpiceLine>> {
+pub(crate) fn parse_spice(input: &str) -> IResult<&str, Vec<SpiceLine<'_>>> {
     many0(delimited(multispace0, spice_line, multispace0))(input)
 }

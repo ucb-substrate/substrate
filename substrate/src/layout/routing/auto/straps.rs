@@ -64,7 +64,7 @@ fn index(net: SingleSupplyNet) -> usize {
 
 #[inline]
 fn net_from_idx(idx: usize) -> SingleSupplyNet {
-    if idx % 2 == 0 {
+    if idx.is_multiple_of(2) {
         SingleSupplyNet::Vss
     } else {
         SingleSupplyNet::Vdd

@@ -33,11 +33,11 @@ impl WireDb {
         }
     }
 
-    pub(crate) fn inner(&self) -> RwLockReadGuard<WireDbInner> {
+    pub(crate) fn inner(&self) -> RwLockReadGuard<'_, WireDbInner> {
         self.inner.read().unwrap()
     }
 
-    pub(crate) fn inner_mut(&self) -> RwLockWriteGuard<WireDbInner> {
+    pub(crate) fn inner_mut(&self) -> RwLockWriteGuard<'_, WireDbInner> {
         self.inner.write().unwrap()
     }
 }
@@ -96,11 +96,14 @@ pub(crate) enum WireValue {
     BinOp(Op, WireKey, WireKey),
     #[allow(unused)]
     Cast(HardwareType, WireKey),
+    #[allow(unused)]
     Port(ArcStr),
     /// Concatenation of wires in MSB order.
     Concat(WireKey, WireKey),
     /// Slice of wire.
+    #[allow(unused)]
     Slice(Range<usize>, WireKey),
+    #[allow(unused)]
     Reg(Reg),
     /// Output of an instance.
     InstanceOutput,

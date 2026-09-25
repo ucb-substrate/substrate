@@ -71,7 +71,7 @@ fn dc_conv(parsed_data: PsfDcData) -> DcData {
             PsfDcData::Sweep(data) => HashMap::from_iter(
                 data.signals
                     .into_iter()
-                    .chain([(data.sweep_var, data.sweep_values)].into_iter())
+                    .chain([(data.sweep_var, data.sweep_values)])
                     .map(|(k, v)| {
                         (
                             k,
