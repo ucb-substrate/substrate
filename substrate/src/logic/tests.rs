@@ -143,9 +143,13 @@ fn test_inv_chain_4_sizing() {
     );
 }
 
-#[test]
-fn test_inv_nand3_nand2() {
+/// INV -> NAND3 (size `a`, branching 4 more NAND3 loads) -> NAND2 (size `b`) -> 18 INV loads.
+///
+/// Delay is `18 + 25a + 4b/a + 54/b`. The stationary point is `b = 5.4^(2/3)`,
+/// `a = 0.4 * sqrt(b)`, i.e. `a = 0.7018`, `b = 3.0780`.
+fn inv_nand3_nand2(min_var_value: f64) -> (LogicPath, VarKey, VarKey) {
     let mut path = LogicPath::new();
+    path.set_min_var_value(min_var_value);
     path.append_sized_gate(INV_MODEL);
     let cl = 18.0 * INV_MODEL.cin;
     let a = path.create_variable();
@@ -154,15 +158,39 @@ fn test_inv_nand3_nand2() {
     path.append_unsized_gate(NAND3_MODEL, a);
     path.append_unsized_gate(NAND2_MODEL, b);
     path.append_capacitor(cl);
-
     path.size();
+    (path, a, b)
+}
+
+#[test]
+fn test_inv_nand3_nand2() {
+    // The unconstrained optimum has `a < 1`, so `a` sits on the default bound
+    // and `b` minimizes `4b + 54/b`, giving `b = sqrt(13.5)`.
+    let (path, a, b) = inv_nand3_nand2(1.0);
     assert!(
-        float_eq!(path.value(a), 2.052, abs <= 0.001),
+        float_eq!(path.value(a), 1.0, abs <= 0.001),
         "incorrect value: {}",
         path.value(a)
     );
     assert!(
-        float_eq!(path.value(b), 5.263, abs <= 0.001),
+        float_eq!(path.value(b), 13.5f64.sqrt(), abs <= 0.001),
+        "incorrect value: {}",
+        path.value(b)
+    );
+}
+
+#[test]
+fn test_inv_nand3_nand2_interior() {
+    let (path, a, b) = inv_nand3_nand2(0.1);
+    let b_opt = 5.4f64.powf(2.0 / 3.0);
+    let a_opt = 0.4 * b_opt.sqrt();
+    assert!(
+        float_eq!(path.value(a), a_opt, abs <= 0.001),
+        "incorrect value: {}",
+        path.value(a)
+    );
+    assert!(
+        float_eq!(path.value(b), b_opt, abs <= 0.001),
         "incorrect value: {}",
         path.value(b)
     );
