@@ -9,7 +9,7 @@ edition = "2021"
 lazy_static = "1.4.0"
 serde = { version = "1.0.159", features = ["derive"] }
 substrate = { path = "../../substrate" }
-tera = "1.18.1"
+tera = "2.4.0"
 spice_rawfile = { path = "../spice_rawfile" }
 anyhow = "1.0.70"
 psfparser = { git = "https://github.com/ucb-substrate/substrate2", branch = "main" }
@@ -17,4 +17,4 @@ log = "0.4"
 
 [dev-dependencies]
 approx = "0.5.1"
-statrs = "0.16.0"
+statrs = "0.19.1"
