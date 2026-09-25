@@ -631,7 +631,7 @@ impl GreedyAbstractRouter {
             for (empty, run) in &info
                 .iter_track(tid)
                 .enumerate()
-                .group_by(|(_, s)| s.is_empty())
+                .chunk_by(|(_, s)| s.is_empty())
             {
                 if !empty {
                     continue;

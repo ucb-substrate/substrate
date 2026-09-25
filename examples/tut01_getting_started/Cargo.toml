@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-substrate = { path = "../../substrate" }
-empty_pdk = { path = "../../pdks/empty_pdk" }
-arcstr = "1"
+substrate = { workspace = true }
+empty_pdk = { workspace = true }
+arcstr = { workspace = true }

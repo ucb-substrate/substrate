@@ -19,3 +19,64 @@ members = [
     "scripts/mergegds",
     "substrate",
 ]
+
+[workspace.dependencies]
+# Workspace crates
+codegen = { path = "codegen" }
+empty_pdk = { path = "pdks/empty_pdk" }
+gds21 = { path = "libs/gds21" }
+ngspice = { path = "plugins/ngspice" }
+sky130_common_pdk = { path = "pdks/sky130_common_pdk" }
+sky130_open_pdk = { path = "pdks/sky130_open_pdk" }
+spice_rawfile = { path = "plugins/spice_rawfile" }
+subgates = { path = "libs/subgates" }
+subgeom = { path = "libs/subgeom" }
+sublut = { path = "libs/sublut" }
+subspice = { path = "plugins/subspice" }
+substrate = { path = "substrate" }
+
+# External crates
+anyhow = "1"
+approx = "0.5"
+arcstr = "1"
+array_map = "0.4"
+bitvec = "1"
+byteorder = "1"
+chrono = "0.4"
+clap = "4"
+csv = "1"
+darling = "0.24"
+derivative = "2"
+derive_builder = "0.20"
+derive_more = "2"
+enum_dispatch = "0.3"
+flexbuffers = "25"
+float_eq = "1"
+grid = "1"
+itertools = "0.15"
+lazy_static = "1"
+log = "0.4"
+nom = "8"
+num-derive = "0.5"
+num-traits = "0.2"
+paste = "1"
+pathfinding = "4"
+proc-macro-crate = "3"
+proc-macro2 = "1"
+psfparser = { git = "https://github.com/ucb-substrate/substrate2", branch = "main" }
+quote = "1"
+regex = "1"
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+serde_yaml = "0.9"
+slotmap = "1"
+splines = "5"
+state = "0.6"
+statrs = "0.19"
+syn = "3"
+tempfile = "3.10"
+tera = "2"
+textwrap = "0.16"
+thiserror = "2"
+toml = "1"

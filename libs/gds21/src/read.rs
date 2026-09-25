@@ -479,7 +479,7 @@ impl GdsParser {
         }
         // Add the Vec of structs, and create the Library from its builder
         lib = lib.structs(structs);
-        Ok(lib.build()?)
+        lib.build()
     }
     /// Parse a cell ([GdsStruct])
     fn parse_struct(&mut self, dates: Vec<i16>) -> GdsResult<GdsStruct> {

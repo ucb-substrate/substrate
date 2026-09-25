@@ -5,5 +5,5 @@ edition = "2021"
 authors = ["Rahul Kumar <rahulkumar@berkeley.edu>"]
 
 [dependencies]
-substrate = { path = "../../substrate" }
-arcstr = "1"
+substrate = { workspace = true }
+arcstr = { workspace = true }

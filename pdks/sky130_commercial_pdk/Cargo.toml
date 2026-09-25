@@ -5,6 +5,6 @@ edition = "2021"
 authors = ["Rahul Kumar <rahulkumar@berkeley.edu>"]
 
 [dependencies]
-substrate = { path = "../../substrate" }
-arcstr = "1"
-sky130_common_pdk = { path = "../sky130_common_pdk" }
+substrate = { workspace = true }
+arcstr = { workspace = true }
+sky130_common_pdk = { workspace = true }

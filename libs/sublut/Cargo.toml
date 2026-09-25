@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-derive_builder = { version = "0.12.0", features = ["clippy"] }
-serde = { version = "1", features = ["derive", "rc"] }
-splines = "4.2.0"
+derive_builder = { workspace = true, features = ["clippy"] }
+serde = { workspace = true, features = ["derive", "rc"] }
+splines = { workspace = true }
 
 [dev-dependencies]
-float_eq = "1"
-serde = { version = "1", features = ["derive", "rc"] }
+float_eq = { workspace = true }
+serde = { workspace = true, features = ["derive", "rc"] }

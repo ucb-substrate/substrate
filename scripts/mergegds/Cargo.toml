@@ -5,6 +5,6 @@ edition = "2021"
 authors = ["Rahul Kumar <rahulkumar@berkeley.edu>"]
 
 [dependencies]
-substrate = { path = "../../substrate" }
-empty_pdk = { path = "../../pdks/empty_pdk" }
-clap = { version = "4.2.1", features = ["derive"] }
+substrate = { workspace = true }
+empty_pdk = { workspace = true }
+clap = { workspace = true, features = ["derive"] }

@@ -1,10 +1,11 @@
+use darling::ast::NestedMeta;
 use darling::FromMeta;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use proc_macro_crate::{crate_name, FoundCrate};
 use quote::quote;
 use syn::spanned::Spanned;
-use syn::{parse_macro_input, AttributeArgs, Error, Fields, Ident, ItemStruct};
+use syn::{parse_macro_input, Error, Fields, Ident, ItemStruct};
 
 #[derive(Debug, FromMeta)]
 struct HardMacroArgs {
@@ -17,7 +18,12 @@ struct HardMacroArgs {
 }
 
 pub(crate) fn hard_macro_inner(args: TokenStream, input: TokenStream) -> TokenStream {
-    let attr_args = parse_macro_input!(args as AttributeArgs);
+    let attr_args = match NestedMeta::parse_meta_list(args.into()) {
+        Ok(v) => v,
+        Err(e) => {
+            return TokenStream::from(darling::Error::from(e).write_errors());
+        }
+    };
     let input = parse_macro_input!(input as ItemStruct);
 
     let args = match HardMacroArgs::from_list(&attr_args) {

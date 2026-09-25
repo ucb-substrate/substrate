@@ -5,6 +5,6 @@ edition = "2021"
 authors = ["Rahul Kumar <rahulkumar@berkeley.edu>", "Rohan Kumar <rohankumar@berkeley.edu>"]
 
 [dependencies]
-substrate = { path = "../../substrate" }
-subgeom = { path = "../../libs/subgeom" }
-arcstr = "1"
+substrate = { workspace = true }
+subgeom = { workspace = true }
+arcstr = { workspace = true }
