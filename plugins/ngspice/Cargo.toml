@@ -6,9 +6,9 @@ license = "MIT"
 description = "Substrate plugin for Ngspice"
 
 [dependencies]
-lazy_static = "1.4.0"
-serde = { version = "1.0.159", features = ["derive"] }
-substrate = { path = "../../substrate" }
-tera = { version = "2.4.0", features = ["glob_fs"] }
-spice_rawfile = { path = "../spice_rawfile" }
-anyhow = "1.0.70"
+lazy_static = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+substrate = { workspace = true }
+tera = { workspace = true, features = ["glob_fs"] }
+spice_rawfile = { workspace = true }
+anyhow = { workspace = true }

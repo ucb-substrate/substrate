@@ -6,15 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lazy_static = "1.4.0"
-serde = { version = "1.0.159", features = ["derive"] }
-substrate = { path = "../../substrate" }
-tera = { version = "2.4.0", features = ["glob_fs"] }
-spice_rawfile = { path = "../spice_rawfile" }
-anyhow = "1.0.70"
-psfparser = { git = "https://github.com/ucb-substrate/substrate2", branch = "main" }
-log = "0.4"
+lazy_static = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+substrate = { workspace = true }
+tera = { workspace = true, features = ["glob_fs"] }
+spice_rawfile = { workspace = true }
+anyhow = { workspace = true }
+psfparser = { workspace = true }
+log = { workspace = true }
 
 [dev-dependencies]
-approx = "0.5.1"
-statrs = "0.19.1"
+approx = { workspace = true }
+statrs = { workspace = true }

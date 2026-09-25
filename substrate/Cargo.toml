@@ -5,37 +5,37 @@ edition = "2021"
 authors = ["Rahul Kumar <rahulkumar@berkeley.edu>", "Rohan Kumar <rohankumar@berkeley.edu>"]
 
 [dependencies]
-derive_builder = { version = "0.20.2", features = ["clippy"] }
-serde = { version = "1", features = ["derive", "rc"] }
-slotmap = { version = "1.0.6", features = ["serde"] }
-tempfile = "3.10"
-thiserror = "2.0.20"
-enum_dispatch = "0.3.11"
-arcstr = { version = "1.1.5", features = ["serde"] }
-derivative = "2.2.0"
-flexbuffers = "25"
-gds21 = { path = "../libs/gds21" }
-subspice = { path = "../plugins/subspice" }
-subgeom = { path = "../libs/subgeom" }
-sublut = { path = "../libs/sublut" }
-codegen = { path = "../codegen" }
-log = "0.4"
-array_map = { version = "0.4", features = ["derive", "serde", "std"] }
-toml = "1.1"
-lazy_static = "1.4"
-regex = "1.7"
-grid = "1.0.1"
-state = "0.6.0"
-pathfinding = "4.2.1"
-itertools = "0.15.0"
-serde_json = "1.0.95"
-anyhow = "1.0.70"
-bitvec = { version = "1", features = ["serde"] }
-csv = "1.2.1"
+derive_builder = { workspace = true, features = ["clippy"] }
+serde = { workspace = true, features = ["derive", "rc"] }
+slotmap = { workspace = true, features = ["serde"] }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+enum_dispatch = { workspace = true }
+arcstr = { workspace = true, features = ["serde"] }
+derivative = { workspace = true }
+flexbuffers = { workspace = true }
+gds21 = { workspace = true }
+subspice = { workspace = true }
+subgeom = { workspace = true }
+sublut = { workspace = true }
+codegen = { workspace = true }
+log = { workspace = true }
+array_map = { workspace = true, features = ["derive", "serde", "std"] }
+toml = { workspace = true }
+lazy_static = { workspace = true }
+regex = { workspace = true }
+grid = { workspace = true }
+state = { workspace = true }
+pathfinding = { workspace = true }
+itertools = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+bitvec = { workspace = true, features = ["serde"] }
+csv = { workspace = true }
 
 [dev-dependencies]
-sky130_open_pdk = { path = "../pdks/sky130_open_pdk" }
-ngspice = { path = "../plugins/ngspice" }
-subgates = { path = "../libs/subgates" }
-lazy_static = "1.4.0"
-float_eq = "1"
+sky130_open_pdk = { workspace = true }
+ngspice = { workspace = true }
+subgates = { workspace = true }
+lazy_static = { workspace = true }
+float_eq = { workspace = true }

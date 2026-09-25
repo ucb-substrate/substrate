@@ -6,6 +6,6 @@ license = "MIT"
 description = "Parse SPICE rawfiles"
 
 [dependencies]
-nom = "8.0.0"
-serde = { version = "1.0.159", features = ["derive"] }
-thiserror = "2.0.20"
+nom = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }

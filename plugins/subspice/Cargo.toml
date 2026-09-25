@@ -4,7 +4,7 @@ version = "0.0.2"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.70"
-nom = "8.0.0"
-serde = { version = "1.0.159", features = ["derive"] }
-thiserror = "2.0.20"
+anyhow = { workspace = true }
+nom = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
