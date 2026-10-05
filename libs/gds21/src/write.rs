@@ -13,20 +13,24 @@ pub struct GdsWriter<'wr> {
 impl<'wr> GdsWriter<'wr> {
     /// Create new [GdsWriter] with destination file `fname`
     pub fn open(fname: impl AsRef<Path>) -> GdsResult<Self> {
-        let file = BufWriter::new(File::create(fname)?);
-        Ok(Self::new(file))
+        Ok(Self::new(File::create(fname)?))
     }
     /// Create a new [GdsWriter] to destination `dest`
+    ///
+    /// Writes to `dest` are buffered, since records are encoded a few bytes at a time.
     pub fn new(dest: impl Write + 'wr) -> Self {
         Self {
-            dest: Box::new(dest),
+            dest: Box::new(BufWriter::new(dest)),
         }
     }
     /// Write [GdsLibrary] `lib` to our destination
     pub fn write_lib(&mut self, lib: &GdsLibrary) -> GdsResult<()> {
         // `write_lib` is our typicaly entry point when writing to file.
         // It quickly dispatches most behavior off to our implementation of the [Encode] trait.
-        self.encode_lib(lib)
+        self.encode_lib(lib)?;
+        // Flush explicitly: dropping the buffer would discard any write error.
+        self.dest.flush()?;
+        Ok(())
     }
     /// Helper to write a sequence of [GdsRecord] references
     fn write_records(&mut self, records: &[GdsRecord]) -> GdsResult<()> {

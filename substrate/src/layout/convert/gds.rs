@@ -49,6 +49,10 @@ pub struct GdsExporter<'a> {
     layers: Arc<RwLock<Layers>>,
     backtrace: Vec<ErrorContext>,
     names_used: HashSet<ArcStr>,
+    /// The next suffix to try when renaming a cell with a given name.
+    ///
+    /// Every lower suffix is already in `names_used`.
+    next_suffix: HashMap<ArcStr, usize>,
     /// The top level cell.
     ///
     /// The name of this cell will be preserved.
@@ -82,6 +86,7 @@ impl SubstrateCtx {
                 layers: data.layers(),
                 backtrace: Vec::new(),
                 names_used: HashSet::with_capacity(data.layouts().cells().count()),
+                next_suffix: HashMap::new(),
                 top: None,
                 export_set: ExportSet::All,
                 names: SecondaryMap::new(),
@@ -105,6 +110,7 @@ impl SubstrateCtx {
                 layers: data.layers(),
                 backtrace: Vec::new(),
                 names_used: HashSet::with_capacity(data.layouts().cells().count()),
+                next_suffix: HashMap::new(),
                 export_set: ExportSet::for_top(&top),
                 top: Some(top),
                 names: SecondaryMap::new(),
@@ -536,13 +542,15 @@ impl<'a> GdsExporter<'a> {
     fn get_cell_name(&mut self, cell: &Arc<Cell>) -> ArcStr {
         let name = cell.name();
         let name = if self.names_used.contains(name) && !self.is_top(cell) {
-            let mut i = 1;
+            // Resume where the previous search for this name stopped. Scanning from 1
+            // every time is quadratic in the number of cells sharing a name.
+            let i = self.next_suffix.entry(name.clone()).or_insert(1);
             loop {
                 let newname = arcstr::format!("{}_{}", name, i);
+                *i += 1;
                 if !self.names_used.contains(&newname) {
                     break newname;
                 }
-                i += 1;
             }
         } else {
             name.clone()
