@@ -3,10 +3,12 @@
 //! These APIs deal with abstract routing notions (tracks, layers, etc.)
 //! rather than raw layout (rectangles, GDS layers, etc.).
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 
 use grid::Grid;
+use indexmap::IndexSet;
 use itertools::Itertools;
+use rustc_hash::FxBuildHasher;
 use subgeom::Dir;
 
 use super::error::*;
@@ -334,10 +336,11 @@ struct AbstractNetInfo {
     curr_net: Net,
     curr_group: ConnectionGroup,
     assigned_nets: HashSet<Net>,
-    /// Ordered so that `pos_in_group` lists positions in the same order on every run:
-    /// the router's search takes them as jump successors, and with a hash set the
-    /// path it picks among equal-length routes varied from process to process.
-    conn_groups: HashMap<ConnectionGroup, BTreeSet<Pos>>,
+    /// Insertion-ordered so that `pos_in_group` lists positions in the same order on
+    /// every run and platform: the router's search takes them as jump successors, and
+    /// with a randomly seeded hash set the path it picked among equal-length routes
+    /// varied from process to process.
+    conn_groups: HashMap<ConnectionGroup, IndexSet<Pos, FxBuildHasher>>,
 }
 
 impl AbstractNetInfo {
@@ -366,13 +369,16 @@ impl AbstractNetInfo {
                 self.curr_group.0 += 1;
             }
         }
-        self.conn_groups.insert(self.curr_group, BTreeSet::new());
+        self.conn_groups
+            .insert(self.curr_group, IndexSet::default());
         self.curr_group
     }
 
     fn delete_from_group(&mut self, pos: Pos, conn_group: ConnectionGroup) {
         if let Some(v) = self.conn_groups.get_mut(&conn_group) {
-            v.remove(&pos);
+            // Moves the last position into the gap: O(1), and the resulting order is
+            // still a function of the operation sequence alone.
+            v.swap_remove(&pos);
         }
     }
 
