@@ -3,7 +3,7 @@
 //! These APIs deal with abstract routing notions (tracks, layers, etc.)
 //! rather than raw layout (rectangles, GDS layers, etc.).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use grid::Grid;
 use itertools::Itertools;
@@ -334,7 +334,10 @@ struct AbstractNetInfo {
     curr_net: Net,
     curr_group: ConnectionGroup,
     assigned_nets: HashSet<Net>,
-    conn_groups: HashMap<ConnectionGroup, HashSet<Pos>>,
+    /// Ordered so that `pos_in_group` lists positions in the same order on every run:
+    /// the router's search takes them as jump successors, and with a hash set the
+    /// path it picks among equal-length routes varied from process to process.
+    conn_groups: HashMap<ConnectionGroup, BTreeSet<Pos>>,
 }
 
 impl AbstractNetInfo {
@@ -363,7 +366,7 @@ impl AbstractNetInfo {
                 self.curr_group.0 += 1;
             }
         }
-        self.conn_groups.insert(self.curr_group, HashSet::new());
+        self.conn_groups.insert(self.curr_group, BTreeSet::new());
         self.curr_group
     }
 
@@ -830,5 +833,49 @@ mod tests {
                 Pos::new(Layer(1), 4, 4).into(),
             )
             .expect("failed to route");
+    }
+
+    /// A route that joins an existing route of its own net may start from any point of
+    /// that route, and here five of them are equally close to the destination. The
+    /// choice must not depend on hash iteration order, which differs between router
+    /// instances and between processes.
+    #[test]
+    fn test_jump_successor_choice_is_deterministic() {
+        let route_once = || {
+            let mut router = GreedyAbstractRouter::new(
+                vec![
+                    AbstractLayerConfig {
+                        grid_space: 1,
+                        dir: Dir::Horiz,
+                    },
+                    AbstractLayerConfig {
+                        grid_space: 1,
+                        dir: Dir::Vert,
+                    },
+                ],
+                20,
+                20,
+            );
+            let net = router.get_unused_net();
+            router
+                .route_with_net(
+                    Pos::new(Layer(0), 0, 10).into(),
+                    Pos::new(Layer(0), 19, 10).into(),
+                    net,
+                )
+                .expect("failed to route the trunk");
+            // Reachable in the same number of steps from (3..=7, 10) on the trunk.
+            let dst = PosSpanBuilder::with_layer(Layer(0))
+                .with(Dir::Horiz, 3, 7)
+                .with(Dir::Vert, 15, 15)
+                .build();
+            router
+                .route_with_net(Pos::new(Layer(0), 0, 10).into(), dst, net)
+                .expect("failed to route the branch")
+        };
+        let first = route_once();
+        for _ in 0..32 {
+            assert_eq!(route_once(), first);
+        }
     }
 }
