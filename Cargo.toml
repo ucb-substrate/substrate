@@ -61,6 +61,8 @@ num-derive = "0.5"
 num-traits = "0.2"
 paste = "1"
 pathfinding = "4"
+indexmap = "2"
+rustc-hash = "2"
 proc-macro-crate = "3"
 proc-macro2 = "1"
 psfparser = { git = "https://github.com/ucb-substrate/substrate2", branch = "main" }
