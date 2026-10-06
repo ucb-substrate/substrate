@@ -240,15 +240,6 @@ impl LogicPath {
         tau
     }
 
-    #[cfg(test)]
-    pub(crate) fn delay_grad(&self, grad: &mut Gradient) -> f64 {
-        let mut tau = 0.0;
-        for idx in 0..self.segments.len() {
-            tau += self.segment_delay_grad(idx, grad);
-        }
-        tau
-    }
-
     fn segment_delay(&self, idx: usize) -> f64 {
         let seg = &self.segments[idx];
 
@@ -271,58 +262,11 @@ impl LogicPath {
         f64::max(self.variables[var].value, self.min_var_value)
     }
 
-    #[cfg(test)]
-    fn segment_delay_grad(&self, idx: usize, grad: &mut Gradient) -> f64 {
-        let seg = &self.segments[idx];
-
-        // Gradient of resistance and capacitance, respectively.
-        let mut drdv = self.zero_grad();
-        let mut dcdv = self.zero_grad();
-
-        let (r, mut c) = match &seg.element {
-            Element::Resistor(r) => (*r, 0.0),
-            Element::SizedGate(gate) => (gate.res, gate.cout),
-            Element::UnsizedGate(gate, v) => {
-                let v = *v;
-                drdv[v] = -gate.res / (self.value(v) * self.value(v));
-                dcdv[v] = dcdv.get(v) + gate.cout;
-                (gate.res / self.value(v), gate.cout * self.value(v))
-            }
-        };
-        c += seg.fixed_cap;
-        for (v, mult) in seg.variable_cap.iter() {
-            c += self.value(v) * mult;
-            dcdv[v] += mult;
-        }
-        c += self.elmore_input_capacitance_grad(idx + 1, &mut dcdv);
-
-        for v in self.variables.keys() {
-            // Apply the product rule.
-            grad[v] += r * dcdv[v] + c * drdv[v];
-        }
-
-        r * c
-    }
-
     fn total_output_cap(&self, segment: &Segment) -> f64 {
         let c = match &segment.element {
             Element::Resistor(_) => 0.0,
             Element::SizedGate(gate) => gate.cout,
             &Element::UnsizedGate(gate, v) => gate.cout * self.value(v),
-        };
-
-        c + segment.fixed_cap
-    }
-
-    #[cfg(test)]
-    fn total_output_cap_grad(&self, segment: &Segment, grad: &mut Gradient) -> f64 {
-        let c = match &segment.element {
-            Element::Resistor(_) => 0.0,
-            Element::SizedGate(gate) => gate.cout,
-            &Element::UnsizedGate(gate, v) => {
-                grad[v] = grad.get(v) + gate.cout;
-                gate.cout * self.value(v)
-            }
         };
 
         c + segment.fixed_cap
@@ -352,89 +296,6 @@ impl LogicPath {
         }
 
         c
-    }
-
-    #[cfg(test)]
-    fn elmore_input_capacitance_grad(&self, mut idx: usize, grad: &mut Gradient) -> f64 {
-        let mut c = 0.0;
-        loop {
-            if idx >= self.segments.len() {
-                return c;
-            }
-            let seg = &self.segments[idx];
-            match &seg.element {
-                Element::Resistor(_) => {
-                    c += self.total_output_cap_grad(seg, grad);
-                }
-                Element::SizedGate(gate) => {
-                    c += gate.cin;
-                    break;
-                }
-                &Element::UnsizedGate(gate, v) => {
-                    c += gate.cin * self.value(v);
-                    grad[v] += gate.cin;
-                    break;
-                }
-            }
-            idx += 1;
-        }
-
-        c
-    }
-
-    #[cfg(test)]
-    pub(crate) fn zero_grad(&self) -> Gradient {
-        let mut grad = Gradient(SecondaryMap::with_capacity(self.variables.len()));
-        for v in self.variables.keys() {
-            grad.0.insert(v, 0f64);
-        }
-        grad
-    }
-}
-
-#[cfg(test)]
-impl LogicPath {
-    /// The raw variable values, in creation order.
-    pub(crate) fn values(&self) -> Vec<f64> {
-        self.variables.values().map(|s| s.value).collect()
-    }
-
-    /// The optimizer before [`DensePath`], kept to check that
-    /// [`LogicPath::size_with_opts`] still returns bit-identical results.
-    pub(crate) fn size_with_opts_reference(&mut self, opts: OptimizerOpts) {
-        let mut lr = opts.lr;
-        let n = self.variables.len();
-        let mut base = vec![0.0; n];
-        let mut base_grad = vec![0.0; n];
-        let mut base_delay = f64::INFINITY;
-        let mut step = lr;
-        let mut iter = 0;
-        while iter < opts.max_iter {
-            let mut grad = self.zero_grad();
-            let delay = self.delay_grad(&mut grad);
-            if delay > base_delay * (1.0 + 1e-9) {
-                step *= 0.5;
-                if step == 0.0 {
-                    self.set_values(&base);
-                    return;
-                }
-            } else {
-                base_delay = delay;
-                for (i, (v, s)) in self.variables.iter().enumerate() {
-                    base[i] = s.value;
-                    base_grad[i] = grad[v];
-                }
-                step = lr;
-                lr *= opts.lr_decay;
-                iter += 1;
-            }
-            for (i, s) in self.variables.values_mut().enumerate() {
-                s.value = f64::max(base[i] - step * base_grad[i], self.min_var_value);
-            }
-        }
-        if self.delay() > base_delay * (1.0 + 1e-9) {
-            self.set_values(&base);
-        }
     }
 }
 
@@ -672,5 +533,144 @@ impl std::ops::Index<VarKey> for Gradient {
 impl std::ops::IndexMut<VarKey> for Gradient {
     fn index_mut(&mut self, index: VarKey) -> &mut Self::Output {
         self.0.index_mut(index)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The optimizer and gradient as they were before `DensePath`, kept so tests can
+    // check that `size_with_opts` still returns bit-identical results.
+    impl LogicPath {
+        /// The raw variable values, in creation order.
+        pub(crate) fn values(&self) -> Vec<f64> {
+            self.variables.values().map(|s| s.value).collect()
+        }
+
+        /// [`LogicPath::size_with_opts`] without [`DensePath`] or the early exit.
+        pub(crate) fn size_with_opts_reference(&mut self, opts: OptimizerOpts) {
+            let mut lr = opts.lr;
+            let n = self.variables.len();
+            let mut base = vec![0.0; n];
+            let mut base_grad = vec![0.0; n];
+            let mut base_delay = f64::INFINITY;
+            let mut step = lr;
+            let mut iter = 0;
+            while iter < opts.max_iter {
+                let mut grad = self.zero_grad();
+                let delay = self.delay_grad(&mut grad);
+                if delay > base_delay * (1.0 + 1e-9) {
+                    step *= 0.5;
+                    if step == 0.0 {
+                        self.set_values(&base);
+                        return;
+                    }
+                } else {
+                    base_delay = delay;
+                    for (i, (v, s)) in self.variables.iter().enumerate() {
+                        base[i] = s.value;
+                        base_grad[i] = grad[v];
+                    }
+                    step = lr;
+                    lr *= opts.lr_decay;
+                    iter += 1;
+                }
+                for (i, s) in self.variables.values_mut().enumerate() {
+                    s.value = f64::max(base[i] - step * base_grad[i], self.min_var_value);
+                }
+            }
+            if self.delay() > base_delay * (1.0 + 1e-9) {
+                self.set_values(&base);
+            }
+        }
+
+        pub(crate) fn delay_grad(&self, grad: &mut Gradient) -> f64 {
+            let mut tau = 0.0;
+            for idx in 0..self.segments.len() {
+                tau += self.segment_delay_grad(idx, grad);
+            }
+            tau
+        }
+
+        fn segment_delay_grad(&self, idx: usize, grad: &mut Gradient) -> f64 {
+            let seg = &self.segments[idx];
+
+            // Gradient of resistance and capacitance, respectively.
+            let mut drdv = self.zero_grad();
+            let mut dcdv = self.zero_grad();
+
+            let (r, mut c) = match &seg.element {
+                Element::Resistor(r) => (*r, 0.0),
+                Element::SizedGate(gate) => (gate.res, gate.cout),
+                Element::UnsizedGate(gate, v) => {
+                    let v = *v;
+                    drdv[v] = -gate.res / (self.value(v) * self.value(v));
+                    dcdv[v] = dcdv.get(v) + gate.cout;
+                    (gate.res / self.value(v), gate.cout * self.value(v))
+                }
+            };
+            c += seg.fixed_cap;
+            for (v, mult) in seg.variable_cap.iter() {
+                c += self.value(v) * mult;
+                dcdv[v] += mult;
+            }
+            c += self.elmore_input_capacitance_grad(idx + 1, &mut dcdv);
+
+            for v in self.variables.keys() {
+                // Apply the product rule.
+                grad[v] += r * dcdv[v] + c * drdv[v];
+            }
+
+            r * c
+        }
+
+        fn total_output_cap_grad(&self, segment: &Segment, grad: &mut Gradient) -> f64 {
+            let c = match &segment.element {
+                Element::Resistor(_) => 0.0,
+                Element::SizedGate(gate) => gate.cout,
+                &Element::UnsizedGate(gate, v) => {
+                    grad[v] = grad.get(v) + gate.cout;
+                    gate.cout * self.value(v)
+                }
+            };
+
+            c + segment.fixed_cap
+        }
+
+        fn elmore_input_capacitance_grad(&self, mut idx: usize, grad: &mut Gradient) -> f64 {
+            let mut c = 0.0;
+            loop {
+                if idx >= self.segments.len() {
+                    return c;
+                }
+                let seg = &self.segments[idx];
+                match &seg.element {
+                    Element::Resistor(_) => {
+                        c += self.total_output_cap_grad(seg, grad);
+                    }
+                    Element::SizedGate(gate) => {
+                        c += gate.cin;
+                        break;
+                    }
+                    &Element::UnsizedGate(gate, v) => {
+                        c += gate.cin * self.value(v);
+                        grad[v] += gate.cin;
+                        break;
+                    }
+                }
+                idx += 1;
+            }
+
+            c
+        }
+
+        pub(crate) fn zero_grad(&self) -> Gradient {
+            let mut grad = Gradient(SecondaryMap::with_capacity(self.variables.len()));
+            for v in self.variables.keys() {
+                grad.0.insert(v, 0f64);
+            }
+            grad
+        }
     }
 }
