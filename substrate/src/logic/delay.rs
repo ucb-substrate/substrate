@@ -166,44 +166,60 @@ impl LogicPath {
         assert!(opts.lr > 0.0);
         assert!(opts.max_iter > 0);
 
+        let path = DensePath::new(self);
+        let mut values: Vec<f64> = self.variables.values().map(|s| s.value).collect();
+        let n = values.len();
+        let mut grad = vec![0.0; n];
+        let mut partials = Vec::new();
+
         let mut lr = opts.lr;
         // Backtracking: a step that increased the delay is undone and retried at
         // half the size. A fixed step overshoots on the `res / size` terms near
         // small sizes. `delay_grad` already returns the delay, so the check is free.
-        let n = self.variables.len();
         let mut base = vec![0.0; n];
         let mut base_grad = vec![0.0; n];
         let mut base_delay = f64::INFINITY;
         let mut step = lr;
         let mut iter = 0;
         while iter < opts.max_iter {
-            let mut grad = self.zero_grad();
-            let delay = self.delay_grad(&mut grad);
+            grad.fill(0.0);
+            let delay = path.delay_grad(&values, &mut grad, &mut partials);
             // The tolerance ignores rounding noise once converged; without it, about
             // half of all steps near the optimum are rejected for nothing.
-            if delay > base_delay * (1.0 + 1e-9) {
+            let accepted = if delay > base_delay * (1.0 + 1e-9) {
                 step *= 0.5;
                 if step == 0.0 {
                     self.set_values(&base);
                     return;
                 }
+                false
             } else {
                 base_delay = delay;
-                for (i, (v, s)) in self.variables.iter().enumerate() {
-                    base[i] = s.value;
-                    base_grad[i] = grad[v];
-                }
+                base.copy_from_slice(&values);
+                base_grad.copy_from_slice(&grad);
                 step = lr;
                 lr *= opts.lr_decay;
                 iter += 1;
-            }
-            for (i, s) in self.variables.values_mut().enumerate() {
+                true
+            };
+            let mut moved = false;
+            for ((value, &b), &g) in values.iter_mut().zip(&base).zip(&base_grad) {
                 // Project back onto the feasible region. Without this, a variable
                 // pinned at `min_var_value` keeps drifting below it (`value()` hides
                 // this) and cannot recover if its optimum later moves above the bound.
-                s.value = f64::max(base[i] - step * base_grad[i], self.min_var_value);
+                let next = f64::max(b - step * g, self.min_var_value);
+                moved |= next.to_bits() != value.to_bits();
+                *value = next;
+            }
+            // Every later step starts from these same values, so it has the same
+            // gradient and is accepted, and its step size is no larger: rounding
+            // returns each value to the same bits again. The remaining iterations
+            // would change nothing.
+            if accepted && !moved {
+                break;
             }
         }
+        self.set_values(&values);
         // The last step has not been checked yet.
         if self.delay() > base_delay * (1.0 + 1e-9) {
             self.set_values(&base);
@@ -224,6 +240,7 @@ impl LogicPath {
         tau
     }
 
+    #[cfg(test)]
     pub(crate) fn delay_grad(&self, grad: &mut Gradient) -> f64 {
         let mut tau = 0.0;
         for idx in 0..self.segments.len() {
@@ -254,6 +271,7 @@ impl LogicPath {
         f64::max(self.variables[var].value, self.min_var_value)
     }
 
+    #[cfg(test)]
     fn segment_delay_grad(&self, idx: usize, grad: &mut Gradient) -> f64 {
         let seg = &self.segments[idx];
 
@@ -296,6 +314,7 @@ impl LogicPath {
         c + segment.fixed_cap
     }
 
+    #[cfg(test)]
     fn total_output_cap_grad(&self, segment: &Segment, grad: &mut Gradient) -> f64 {
         let c = match &segment.element {
             Element::Resistor(_) => 0.0,
@@ -335,6 +354,7 @@ impl LogicPath {
         c
     }
 
+    #[cfg(test)]
     fn elmore_input_capacitance_grad(&self, mut idx: usize, grad: &mut Gradient) -> f64 {
         let mut c = 0.0;
         loop {
@@ -362,6 +382,7 @@ impl LogicPath {
         c
     }
 
+    #[cfg(test)]
     pub(crate) fn zero_grad(&self) -> Gradient {
         let mut grad = Gradient(SecondaryMap::with_capacity(self.variables.len()));
         for v in self.variables.keys() {
@@ -369,6 +390,233 @@ impl LogicPath {
         }
         grad
     }
+}
+
+#[cfg(test)]
+impl LogicPath {
+    /// The raw variable values, in creation order.
+    pub(crate) fn values(&self) -> Vec<f64> {
+        self.variables.values().map(|s| s.value).collect()
+    }
+
+    /// The optimizer before [`DensePath`], kept to check that
+    /// [`LogicPath::size_with_opts`] still returns bit-identical results.
+    pub(crate) fn size_with_opts_reference(&mut self, opts: OptimizerOpts) {
+        let mut lr = opts.lr;
+        let n = self.variables.len();
+        let mut base = vec![0.0; n];
+        let mut base_grad = vec![0.0; n];
+        let mut base_delay = f64::INFINITY;
+        let mut step = lr;
+        let mut iter = 0;
+        while iter < opts.max_iter {
+            let mut grad = self.zero_grad();
+            let delay = self.delay_grad(&mut grad);
+            if delay > base_delay * (1.0 + 1e-9) {
+                step *= 0.5;
+                if step == 0.0 {
+                    self.set_values(&base);
+                    return;
+                }
+            } else {
+                base_delay = delay;
+                for (i, (v, s)) in self.variables.iter().enumerate() {
+                    base[i] = s.value;
+                    base_grad[i] = grad[v];
+                }
+                step = lr;
+                lr *= opts.lr_decay;
+                iter += 1;
+            }
+            for (i, s) in self.variables.values_mut().enumerate() {
+                s.value = f64::max(base[i] - step * base_grad[i], self.min_var_value);
+            }
+        }
+        if self.delay() > base_delay * (1.0 + 1e-9) {
+            self.set_values(&base);
+        }
+    }
+}
+
+/// A [`LogicPath`] with its variables numbered in creation order, so the optimizer
+/// can work on flat vectors.
+///
+/// [`DensePath::delay_grad`] performs the same floating-point operations in the same
+/// order as the test-only `LogicPath::delay_grad`, so it returns bit-identical results.
+/// It differs only in skipping the zero partials of variables a segment does not touch.
+struct DensePath {
+    segments: Vec<DenseSegment>,
+    min_var_value: f64,
+}
+
+struct DenseSegment {
+    element: DenseElement,
+    fixed_cap: f64,
+    /// `(variable, multiplier)` pairs, in the iteration order of
+    /// [`Segment::variable_cap`], which is the order their capacitances are summed in.
+    variable_cap: Vec<(usize, f64)>,
+}
+
+enum DenseElement {
+    SizedGate(GateModel),
+    UnsizedGate(GateModel, usize),
+    Resistor(f64),
+}
+
+impl DensePath {
+    fn new(path: &LogicPath) -> Self {
+        let mut index = SecondaryMap::with_capacity(path.variables.len());
+        for (i, v) in path.variables.keys().enumerate() {
+            index.insert(v, i);
+        }
+        let segments = path
+            .segments
+            .iter()
+            .map(|seg| DenseSegment {
+                element: match &seg.element {
+                    Element::SizedGate(gate) => DenseElement::SizedGate(*gate),
+                    &Element::UnsizedGate(gate, v) => DenseElement::UnsizedGate(gate, index[v]),
+                    Element::Resistor(r) => DenseElement::Resistor(*r),
+                },
+                fixed_cap: seg.fixed_cap,
+                variable_cap: seg
+                    .variable_cap
+                    .iter()
+                    .map(|(v, &mult)| (index[v], mult))
+                    .collect(),
+            })
+            .collect();
+        Self {
+            segments,
+            min_var_value: path.min_var_value,
+        }
+    }
+
+    #[inline]
+    fn value(&self, values: &[f64], var: usize) -> f64 {
+        f64::max(values[var], self.min_var_value)
+    }
+
+    /// Returns the delay and adds its gradient into `grad`.
+    ///
+    /// `partials` is scratch space, reused across calls to avoid allocating.
+    fn delay_grad(
+        &self,
+        values: &[f64],
+        grad: &mut [f64],
+        partials: &mut Vec<(usize, f64)>,
+    ) -> f64 {
+        let mut tau = 0.0;
+        for idx in 0..self.segments.len() {
+            tau += self.segment_delay_grad(idx, values, grad, partials);
+        }
+        tau
+    }
+
+    fn segment_delay_grad(
+        &self,
+        idx: usize,
+        values: &[f64],
+        grad: &mut [f64],
+        dcdv: &mut Vec<(usize, f64)>,
+    ) -> f64 {
+        let seg = &self.segments[idx];
+
+        // The capacitance's nonzero partials, as `(variable, partial)`. Only the
+        // element's own variable has a nonzero partial of the resistance.
+        dcdv.clear();
+        let mut drdv = None;
+
+        let (r, mut c) = match seg.element {
+            DenseElement::Resistor(r) => (r, 0.0),
+            DenseElement::SizedGate(gate) => (gate.res, gate.cout),
+            DenseElement::UnsizedGate(gate, v) => {
+                drdv = Some((
+                    v,
+                    -gate.res / (self.value(values, v) * self.value(values, v)),
+                ));
+                *partial(dcdv, v) += gate.cout;
+                (
+                    gate.res / self.value(values, v),
+                    gate.cout * self.value(values, v),
+                )
+            }
+        };
+        c += seg.fixed_cap;
+        for &(v, mult) in &seg.variable_cap {
+            c += self.value(values, v) * mult;
+            *partial(dcdv, v) += mult;
+        }
+        c += self.elmore_input_capacitance_grad(idx + 1, values, dcdv);
+
+        // Apply the product rule.
+        for &(v, dc) in dcdv.iter() {
+            let dr = match drdv {
+                Some((u, dr)) if u == v => dr,
+                _ => 0.0,
+            };
+            grad[v] += r * dc + c * dr;
+        }
+        // Every other variable gains `r * 0.0 + c * 0.0`. Gradient entries start at
+        // `+0.0` and only have values added to them, so they are never `-0.0`, and
+        // adding a zero leaves them unchanged. Only a NaN, from an infinite `r` or
+        // `c`, changes them.
+        let zero = r * 0.0 + c * 0.0;
+        if zero.is_nan() {
+            for (v, g) in grad.iter_mut().enumerate() {
+                if !dcdv.iter().any(|&(u, _)| u == v) {
+                    *g += zero;
+                }
+            }
+        }
+
+        r * c
+    }
+
+    fn elmore_input_capacitance_grad(
+        &self,
+        mut idx: usize,
+        values: &[f64],
+        dcdv: &mut Vec<(usize, f64)>,
+    ) -> f64 {
+        let mut c = 0.0;
+        loop {
+            if idx >= self.segments.len() {
+                return c;
+            }
+            let seg = &self.segments[idx];
+            match seg.element {
+                // As in `LogicPath::total_output_cap_grad`.
+                DenseElement::Resistor(_) => {
+                    c += 0.0 + seg.fixed_cap;
+                }
+                DenseElement::SizedGate(gate) => {
+                    c += gate.cin;
+                    break;
+                }
+                DenseElement::UnsizedGate(gate, v) => {
+                    c += gate.cin * self.value(values, v);
+                    *partial(dcdv, v) += gate.cin;
+                    break;
+                }
+            }
+            idx += 1;
+        }
+
+        c
+    }
+}
+
+/// Returns the partial for `var`, adding it as `0.0` if absent.
+fn partial(partials: &mut Vec<(usize, f64)>, var: usize) -> &mut f64 {
+    let i = match partials.iter().position(|&(v, _)| v == var) {
+        Some(i) => i,
+        None => {
+            partials.push((var, 0.0));
+            partials.len() - 1
+        }
+    };
+    &mut partials[i].1
 }
 
 impl Segment {

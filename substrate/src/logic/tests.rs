@@ -195,3 +195,105 @@ fn test_inv_nand3_nand2_interior() {
         path.value(b)
     );
 }
+
+/// A xorshift generator, so the randomized test needs no extra dependencies.
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+
+    fn below(&mut self, n: usize) -> usize {
+        (self.next() % n as u64) as usize
+    }
+
+    fn uniform(&mut self, lo: f64, hi: f64) -> f64 {
+        lo + (hi - lo) * (self.next() >> 11) as f64 / (1u64 << 53) as f64
+    }
+
+    fn gate(&mut self) -> GateModel {
+        GateModel {
+            res: self.uniform(0.5, 5.0),
+            cin: self.uniform(0.5, 5.0),
+            cout: self.uniform(0.0, 5.0),
+        }
+    }
+}
+
+/// A random path using every kind of element and capacitance `LogicPath` supports.
+fn random_path(rng: &mut Rng) -> LogicPath {
+    let mut path = LogicPath::new();
+    // A zero bound lets sizes reach zero, making resistances infinite.
+    let min_var_value = [1.0, 0.5, 0.1, 0.0][rng.below(4)];
+    path.set_min_var_value(min_var_value);
+    path.append_sized_gate(rng.gate());
+    let mut vars = Vec::new();
+    for _ in 0..1 + rng.below(8) {
+        match rng.below(6) {
+            0 => path.append_resistor(rng.uniform(0.0, 2.0)),
+            1 => path.append_wire(WireModel {
+                res: rng.uniform(0.0, 2.0),
+                cap: rng.uniform(0.0, 4.0),
+            }),
+            2 => path.append_sized_gate(rng.gate()),
+            _ => {
+                let var = if !vars.is_empty() && rng.below(4) == 0 {
+                    vars[rng.below(vars.len())]
+                } else {
+                    let initial = if min_var_value == 0.0 && rng.below(4) == 0 {
+                        0.0
+                    } else {
+                        rng.uniform(0.5, 4.0)
+                    };
+                    let var = path.create_variable_with_initial(initial);
+                    vars.push(var);
+                    var
+                };
+                // Branching loads, possibly several per segment and on other sizes.
+                for _ in 0..rng.below(4) {
+                    let load = if rng.below(2) == 0 {
+                        var
+                    } else {
+                        vars[rng.below(vars.len())]
+                    };
+                    path.append_variable_capacitor(rng.uniform(0.0, 20.0), load);
+                }
+                path.append_unsized_gate(rng.gate(), var);
+            }
+        }
+        if rng.below(2) == 0 {
+            path.append_capacitor(rng.uniform(0.0, 10.0));
+        }
+    }
+    path.append_capacitor(rng.uniform(1.0, 200.0));
+    path
+}
+
+#[test]
+fn size_with_opts_matches_reference_bit_for_bit() {
+    let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+    for case in 0..300 {
+        let path = random_path(&mut rng);
+        let opts = OptimizerOpts {
+            lr: 10f64.powf(rng.uniform(-3.0, 1.0)),
+            // Fast decays converge within `max_iter`, exercising the early exit.
+            lr_decay: [1.0, 0.9999, 0.999, 0.99][rng.below(4)],
+            max_iter: 1 + rng.below(3_000),
+        };
+        let mut sized = path.clone();
+        sized.size_with_opts(opts);
+        let mut reference = path;
+        reference.size_with_opts_reference(opts);
+        let bits = |path: &LogicPath| {
+            path.values()
+                .into_iter()
+                .map(f64::to_bits)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(bits(&sized), bits(&reference), "case {case}: {opts:?}");
+    }
+}
