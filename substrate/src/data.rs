@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -446,14 +446,17 @@ impl SubstrateCtx {
             if let Some(prefix) = path.parent() {
                 create_dir_all(prefix)?;
             }
-            let mut f = crate::io::create_file(path)?;
+            // The netlister makes many small writes; unbuffered, each is a syscall.
+            let mut f = BufWriter::new(crate::io::create_file(path)?);
             let args = WriteSchematicArgs {
                 params,
                 out: &mut f,
                 purpose,
                 flatten_top: FlattenTop::No,
             };
-            self.write_schematic_for_purpose::<T, _>(args)
+            self.write_schematic_for_purpose::<T, _>(args)?;
+            f.flush()?;
+            Ok(())
         };
 
         with_err_context(inner(), || {
@@ -773,7 +776,7 @@ impl SubstrateCtx {
         let work_dir = work_dir.as_ref();
         create_dir_all(work_dir)?;
         let path = work_dir.join("source.spice");
-        let mut f = File::create(&path)?;
+        let mut f = BufWriter::new(File::create(&path)?);
 
         let opts = self.try_netlister()?.opts();
         let mut tb = T::new(params, self)?;

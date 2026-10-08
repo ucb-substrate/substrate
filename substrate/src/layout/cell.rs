@@ -14,7 +14,7 @@ use subgeom::bbox::{Bbox, BoundBox};
 use subgeom::orientation::Orientation;
 use subgeom::transform::{Transform, Transformation, Translate};
 use subgeom::trim::Trim;
-use subgeom::{Dir, Point, Rect, Shape, Side};
+use subgeom::{Dir, Point, Rect, Shape, Side, Span};
 use thiserror::Error;
 
 use super::context::LayoutCtx;
@@ -1106,25 +1106,9 @@ impl CellPort {
 
         for shapes in self.shapes.values_mut() {
             let mut rects: Vec<Rect> = shapes.iter().filter_map(|shape| shape.as_rect()).collect();
-            let mut i = 0;
-            while i < rects.len() {
-                let mut j = i + 1;
-                while j < rects.len() {
-                    let rect1 = rects[i];
-                    let rect2 = rects[j];
-                    for dir in [Dir::Horiz, Dir::Vert] {
-                        if rect1.span(dir) == rect2.span(dir)
-                            && rect1.span(!dir).intersects(&rect2.span(!dir))
-                        {
-                            rects[i] = rect1.union(rect2.bbox()).into_rect();
-                            rects.swap_remove(j);
-                            j = i + 1;
-                            break;
-                        }
-                    }
-                    j += 1;
-                }
-                i += 1;
+            if !coalesce_rects(&mut rects) && rects.len() == shapes.len() {
+                // Nothing coalesced, and no non-rect shapes to move ahead of the rects.
+                continue;
             }
             *shapes = shapes
                 .iter()
@@ -1164,6 +1148,133 @@ impl CellPort {
             .map(|shapes| shapes.iter())
             .unwrap_or([].iter())
     }
+}
+
+/// Below this many rectangles, [`coalesce_rects`] compares them pairwise instead of indexing them.
+const COALESCE_INDEX_MIN_RECTS: usize = 32;
+
+/// Coalesces `rects` in place, returning whether any were coalesced.
+///
+/// Rectangle `i` absorbs each later rectangle with the same span in one direction and an
+/// intersecting span in the other, taking the first one at or after a scan position that
+/// starts at `i + 1` and restarts at `i + 2` after each absorption. Absorbed rectangles
+/// are swap-removed. The result, order included, is what [`coalesce_rects_pairwise`]
+/// produces; port shapes, and the layouts generated from them, depend on it.
+fn coalesce_rects(rects: &mut Vec<Rect>) -> bool {
+    if rects.len() < COALESCE_INDEX_MIN_RECTS {
+        coalesce_rects_pairwise(rects)
+    } else {
+        coalesce_rects_indexed(rects)
+    }
+}
+
+/// The reference implementation of [`coalesce_rects`], quadratic in the number of rectangles.
+fn coalesce_rects_pairwise(rects: &mut Vec<Rect>) -> bool {
+    let n = rects.len();
+    let mut i = 0;
+    while i < rects.len() {
+        let mut j = i + 1;
+        while j < rects.len() {
+            let rect1 = rects[i];
+            let rect2 = rects[j];
+            for dir in [Dir::Horiz, Dir::Vert] {
+                if rect1.span(dir) == rect2.span(dir)
+                    && rect1.span(!dir).intersects(&rect2.span(!dir))
+                {
+                    rects[i] = rect1.union(rect2.bbox()).into_rect();
+                    rects.swap_remove(j);
+                    j = i + 1;
+                    break;
+                }
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+    rects.len() != n
+}
+
+/// [`coalesce_rects`] using an index of the rectangles by span.
+///
+/// Rectangles are identified by their starting positions. Positions at or before the one
+/// being scanned from never change again, and later positions only ever hold rectangles
+/// that have not been scanned from or grown yet. So only rectangles that could be
+/// coalesced with another at the start need scanning from, and candidates can be looked
+/// up by their starting geometry.
+fn coalesce_rects_indexed(rects: &mut Vec<Rect>) -> bool {
+    let n = rects.len();
+    // For each direction, every rectangle's (span in `dir`, span in `!dir`, ID), sorted. Runs
+    // with the same span in `dir` are contiguous and ordered by where they start in `!dir`.
+    let by_span = [Dir::Horiz, Dir::Vert].map(|dir| {
+        let mut keys: Vec<(Span, Span, usize)> = rects
+            .iter()
+            .enumerate()
+            .map(|(id, rect)| (rect.span(dir), rect.span(!dir), id))
+            .collect();
+        keys.sort_unstable();
+        (dir, keys)
+    });
+
+    // Rectangles that intersect another with the same span in some direction.
+    let mut coalescible = vec![false; n];
+    for (_, keys) in &by_span {
+        for run in keys.chunk_by(|a, b| a.0 == b.0) {
+            let mut max_stop = i64::MIN;
+            for (k, &(_, other, id)) in run.iter().enumerate() {
+                let next_start = run.get(k + 1).map(|next| next.1.start());
+                coalescible[id] |=
+                    other.start() <= max_stop || next_start.is_some_and(|s| s <= other.stop());
+                max_stop = max_stop.max(other.stop());
+            }
+        }
+    }
+    if !coalescible.contains(&true) {
+        return false;
+    }
+
+    // The position of the first not-yet-absorbed rectangle in `from..len` that `rect` can
+    // absorb.
+    let first_absorbable = |rect: Rect, from: usize, len: usize, pos_of: &[usize]| {
+        let mut first: Option<usize> = None;
+        for (dir, keys) in &by_span {
+            let (span, other) = (rect.span(*dir), rect.span(!*dir));
+            let run_start = keys.partition_point(|key| key.0 < span);
+            for &(cand_span, cand_other, id) in &keys[run_start..] {
+                if cand_span != span || cand_other.start() > other.stop() {
+                    break;
+                }
+                let pos = pos_of[id];
+                if (from..len).contains(&pos)
+                    && cand_other.intersects(&other)
+                    && first.is_none_or(|first| pos < first)
+                {
+                    first = Some(pos);
+                }
+            }
+        }
+        first
+    };
+
+    // Absorbed rectangles get a position of `usize::MAX`.
+    let mut pos_of: Vec<usize> = (0..n).collect();
+    let mut id_at: Vec<usize> = (0..n).collect();
+    let mut i = 0;
+    while i < rects.len() {
+        if coalescible[id_at[i]] {
+            let mut from = i + 1;
+            while let Some(j) = first_absorbable(rects[i], from, rects.len(), &pos_of) {
+                rects[i] = rects[i].union(rects[j].bbox()).into_rect();
+                rects.swap_remove(j);
+                pos_of[id_at.swap_remove(j)] = usize::MAX;
+                if let Some(&moved) = id_at.get(j) {
+                    pos_of[moved] = j;
+                }
+                from = i + 2;
+            }
+        }
+        i += 1;
+    }
+    rects.len() != n
 }
 
 impl<T> Trim<T> for CellPort
@@ -1646,6 +1757,114 @@ mod tests {
             Some(Cache {
                 bbox: Bbox::empty(),
             })
+        );
+    }
+
+    /// A xorshift generator, so the randomized tests below are reproducible.
+    struct Rng(u64);
+
+    impl Rng {
+        fn below(&mut self, n: u64) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0 % n
+        }
+
+        /// A rectangle on a small grid, so that equal spans and overlaps are common.
+        fn rect(&mut self, grid: u64) -> Rect {
+            let mut coord = || self.below(grid) as i64 * 10;
+            Rect::new(Point::new(coord(), coord()), Point::new(coord(), coord()))
+        }
+    }
+
+    #[test]
+    fn test_coalesce_rects_indexed_matches_pairwise() {
+        let mut rng = Rng(0x9e37_79b9_7f4a_7c15);
+        for case in 0..2000 {
+            let grid = 2 + case % 12;
+            let n = rng.below(150) as usize;
+            let rects: Vec<Rect> = (0..n).map(|_| rng.rect(grid)).collect();
+            let (mut pairwise, mut indexed) = (rects.clone(), rects.clone());
+            assert_eq!(
+                coalesce_rects_pairwise(&mut pairwise),
+                coalesce_rects_indexed(&mut indexed),
+                "case {case}: {rects:?}"
+            );
+            assert_eq!(pairwise, indexed, "case {case}: {rects:?}");
+        }
+    }
+
+    #[test]
+    fn test_coalesce_rects_indexed_matches_pairwise_incrementally() {
+        // Repeated passes over a growing list, as when a port is built up by merges. A pass
+        // can leave coalescible pairs behind for the next one.
+        let mut rng = Rng(0x2545_f491_4f6c_dd1d);
+        for case in 0..200 {
+            let grid = 4 + case % 30;
+            let (mut pairwise, mut indexed) = (Vec::new(), Vec::new());
+            for step in 0..60 {
+                for _ in 0..1 + rng.below(4) {
+                    let rect = rng.rect(grid);
+                    pairwise.push(rect);
+                    indexed.push(rect);
+                }
+                assert_eq!(
+                    coalesce_rects_pairwise(&mut pairwise),
+                    coalesce_rects_indexed(&mut indexed),
+                    "case {case}, step {step}"
+                );
+                assert_eq!(pairwise, indexed, "case {case}, step {step}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_merge_coalesces_rects() {
+        let mut layers: SlotMap<LayerKey, ()> = SlotMap::with_key();
+        let layer = layers.insert(());
+        let rect = |x0, y0, x1, y1| Shape::Rect(Rect::new(Point::new(x0, y0), Point::new(x1, y1)));
+
+        let mut port = CellPort::with_shape("a", layer, rect(0, 0, 10, 10));
+        // Same vertical span, touching: coalesced.
+        port.merge(CellPort::with_shape("a", layer, rect(10, 0, 20, 10)));
+        // Same vertical span, apart: kept.
+        port.merge(CellPort::with_shape("a", layer, rect(30, 0, 40, 10)));
+        // Overlapping but with no span in common: kept.
+        port.merge(CellPort::with_shape("a", layer, rect(5, 5, 15, 15)));
+        assert_eq!(
+            port.shapes(layer).cloned().collect::<Vec<_>>(),
+            vec![rect(0, 0, 20, 10), rect(30, 0, 40, 10), rect(5, 5, 15, 15)]
+        );
+
+        // Enough rects to take the indexed path. Abutting squares merged one at a time
+        // become one rect.
+        let mut port = CellPort::new("b");
+        for k in 0..100 {
+            port.merge(CellPort::with_shape(
+                "b",
+                layer,
+                rect(10 * k, 0, 10 * k + 10, 10),
+            ));
+        }
+        assert_eq!(
+            port.shapes(layer).cloned().collect::<Vec<_>>(),
+            vec![rect(0, 0, 1000, 10)]
+        );
+        // Merged all at once, a single pass leaves some apart, the same as the pairwise pass.
+        let row: Vec<Shape> = (0..100)
+            .map(|k| rect(10 * k, 100, 10 * k + 10, 110))
+            .collect();
+        port.merge(CellPort::with_shapes("b", layer, row.clone()));
+        let mut expected: Vec<Rect> =
+            std::iter::once(Rect::new(Point::new(0, 0), Point::new(1000, 10)))
+                .chain(row.iter().filter_map(Shape::as_rect))
+                .collect();
+        coalesce_rects_pairwise(&mut expected);
+        assert!(expected.len() > 2);
+        assert_eq!(
+            port.shapes(layer).cloned().collect::<Vec<_>>(),
+            expected.into_iter().map(Shape::Rect).collect::<Vec<_>>()
         );
     }
 }
