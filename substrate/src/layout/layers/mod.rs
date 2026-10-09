@@ -1,13 +1,14 @@
 //! Utilities and types for managing layers in a PDK.
 
 use std::borrow::Borrow;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 use derive_builder::Builder;
+use indexmap::map::Entry;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, SlotMap};
 use subgeom::bbox::{Bbox, BoundBox};
@@ -167,7 +168,8 @@ impl Layers {
         mut base: impl FnMut(&str) -> LayerInfo,
     ) -> Result<Self, csv::Error> {
         let mut reader = csv::Reader::from_reader(csv.as_bytes());
-        let mut layer_infos: HashMap<String, LayerInfo> = HashMap::new();
+        // In file order, so layers get the same keys (and key order) in every run.
+        let mut layer_infos: IndexMap<String, LayerInfo> = IndexMap::new();
 
         for record in reader.deserialize() {
             let record: CsvLayerRecord = record?;
@@ -535,4 +537,28 @@ impl UserLayer {
 /// A trait representing functions available for multi-layered objects with bounding boxes.
 pub trait LayerBoundBox: BoundBox {
     fn layer_bbox(&self, layer: LayerKey) -> Bbox;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Layers get keys in the order the CSV lists them. Keys order the shapes of
+    /// layout ports, so assigning them in a hash map's order made generated layouts
+    /// differ from run to run.
+    #[test]
+    fn test_from_csv_assigns_keys_in_file_order() {
+        let names = [
+            "pwell", "nwell", "diff", "poly", "li1", "met1", "met2", "met3", "met4", "met5",
+        ];
+        let mut csv = String::from("layernum,datatype,name,purpose\n");
+        for (i, name) in names.iter().enumerate() {
+            csv.push_str(&format!("{i},20,{name},drawing\n{i},16,{name},pin\n"));
+        }
+        let layers =
+            Layers::from_csv(&csv, |_| LayerInfoBuilder::default().build().unwrap()).unwrap();
+
+        let keys = names.map(|name| layers.get_key(name).unwrap());
+        assert!(keys.windows(2).all(|w| w[0] < w[1]), "{keys:?}");
+    }
 }

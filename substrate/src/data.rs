@@ -1166,7 +1166,11 @@ impl SubstrateData {
             self.emit_module(key, &netlist, &mut out)?;
         }
 
-        for module in self.schematics.external_modules() {
+        // Emit external modules by name, not in the hash map's order, so the netlist is the
+        // same from run to run.
+        let mut external_modules = self.schematics.external_modules().collect::<Vec<_>>();
+        external_modules.sort_unstable_by(|a, b| a.name().cmp(b.name()));
+        for module in external_modules {
             let source = module.source();
             match source {
                 RawSource::File(path) => {
