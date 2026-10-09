@@ -1,12 +1,14 @@
 //! Types related to the creation and instantiation of [`Cell`]s.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::Hash;
 use std::sync::Arc;
 
 use derive_builder::Builder;
+use indexmap::map::Entry;
+use indexmap::IndexMap;
+use rustc_hash::FxBuildHasher;
 use serde::{Deserialize, Serialize};
 use slotmap::new_key_type;
 use state::TypeMap;
@@ -27,7 +29,11 @@ use crate::deps::arcstr::ArcStr;
 use crate::error::ErrorSource;
 use crate::fmt::signal::{format_signal, BusFmt};
 
-pub type BusPort = HashMap<usize, CellPort>;
+/// The ports of a bus, by index.
+///
+/// Ports and their shapes iterate in insertion order, so everything generated from them
+/// is independent of the process's hash seeds.
+pub type BusPort = IndexMap<usize, CellPort, FxBuildHasher>;
 
 /// The layout view of a cell.
 #[derive(Debug, Default)]
@@ -268,15 +274,17 @@ where
 
 #[derive(Debug, Default, Clone)]
 pub struct PortMap {
-    ports: HashMap<ArcStr, BusPort>,
+    ports: IndexMap<ArcStr, BusPort, FxBuildHasher>,
 }
 
 impl PortMap {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn from_map(ports: HashMap<ArcStr, BusPort>) -> Self {
-        Self { ports }
+    pub fn from_map(ports: impl IntoIterator<Item = (ArcStr, BusPort)>) -> Self {
+        Self {
+            ports: ports.into_iter().collect(),
+        }
     }
     pub fn add_port(&mut self, port: impl Into<CellPort>) -> Result<(), PortError> {
         self.add_port_with_strategy(port, PortConflictStrategy::default())
@@ -308,7 +316,7 @@ impl PortMap {
                 }
             },
             Entry::Vacant(v) => {
-                v.insert(HashMap::from([(id.index, port)]));
+                v.insert(BusPort::from_iter([(id.index, port)]));
             }
         }
         Ok(())
@@ -427,7 +435,7 @@ pub struct CellPort {
     /// The port's identifier.
     pub(crate) id: PortId,
     /// Shapes, grouped by layer.
-    pub(crate) shapes: HashMap<LayerKey, Vec<Shape>>,
+    pub(crate) shapes: IndexMap<LayerKey, Vec<Shape>, FxBuildHasher>,
     /// Information on how this port must be electrically connected.
     ///
     /// See [`MustConnect`] for more information.
@@ -453,7 +461,7 @@ impl Transform for CellPort {
                 let v = v.iter().map(|s| s.transform(trans)).collect::<Vec<_>>();
                 (*k, v)
             })
-            .collect::<HashMap<_, _>>();
+            .collect::<IndexMap<_, _, _>>();
 
         Self {
             id: self.id.clone(),
@@ -466,7 +474,7 @@ impl Transform for CellPort {
 #[derive(Debug, Clone, Eq, PartialEq, Default)]
 pub struct CellPortBuilder {
     id: Option<PortId>,
-    shapes: HashMap<LayerKey, Vec<Shape>>,
+    shapes: IndexMap<LayerKey, Vec<Shape>, FxBuildHasher>,
     must_connect: MustConnect,
 }
 
@@ -833,9 +841,9 @@ impl Cell {
             .filter_map(|a| a.trim(bounds))
             .collect();
 
-        self.ports = PortMap::from_map(HashMap::from_iter(self.ports.bus_ports().filter_map(
+        self.ports = PortMap::from_map(Vec::from_iter(self.ports.bus_ports().filter_map(
             |(k, bus)| {
-                let new_bus: HashMap<usize, CellPort> = HashMap::from_iter(
+                let new_bus = BusPort::from_iter(
                     bus.iter()
                         .filter_map(|(index, port)| port.trim(bounds).map(|port| (*index, port))),
                 );
@@ -987,7 +995,7 @@ impl CellPort {
     pub fn new(id: impl Into<PortId>) -> Self {
         Self {
             id: id.into(),
-            shapes: HashMap::new(),
+            shapes: IndexMap::default(),
             must_connect: Default::default(),
         }
     }
@@ -998,7 +1006,7 @@ impl CellPort {
     }
 
     pub fn with_shape(id: impl Into<PortId>, layer: LayerKey, shape: impl Into<Shape>) -> Self {
-        let mut shapes = HashMap::with_capacity(1);
+        let mut shapes = IndexMap::default();
         shapes.insert(layer, vec![shape.into()]);
         Self {
             id: id.into(),
@@ -1012,7 +1020,7 @@ impl CellPort {
         layer: LayerKey,
         shapes: impl IntoIterator<Item = Shape>,
     ) -> Self {
-        let mut map = HashMap::with_capacity(1);
+        let mut map = IndexMap::default();
         let entry = map.entry(layer).or_insert_with(Vec::new);
         entry.extend(shapes);
         Self {
@@ -1023,7 +1031,7 @@ impl CellPort {
     }
 
     pub fn with_element(id: impl Into<PortId>, elem: Element) -> Self {
-        let mut shapes = HashMap::with_capacity(1);
+        let mut shapes = IndexMap::default();
         shapes.insert(elem.layer.layer(), vec![elem.into_inner()]);
         Self {
             id: id.into(),
@@ -1296,7 +1304,7 @@ where
                 )
             })
             .filter(|(_, v)| !v.is_empty());
-        let shapes = HashMap::from_iter(iter);
+        let shapes = IndexMap::from_iter(iter);
         if shapes.is_empty() {
             return None;
         }
@@ -1449,7 +1457,7 @@ where
 
 impl<'a> Port for &'a CellPort {
     type ShapeIter = std::iter::Cloned<std::slice::Iter<'a, Shape>>;
-    type LayerIter = std::iter::Copied<std::collections::hash_map::Keys<'a, LayerKey, Vec<Shape>>>;
+    type LayerIter = std::iter::Copied<indexmap::map::Keys<'a, LayerKey, Vec<Shape>>>;
 
     fn id(&self) -> &PortId {
         &self.id
@@ -1776,6 +1784,62 @@ mod tests {
             let mut coord = || self.below(grid) as i64 * 10;
             Rect::new(Point::new(coord(), coord()), Point::new(coord(), coord()))
         }
+    }
+
+    /// Ports iterate in the order they were first added (by name, then by bus index within
+    /// a name), and each port's shapes by the order their layers were first added, so
+    /// layouts generated from them do not depend on hash seeds.
+    #[test]
+    fn test_port_iteration_follows_insertion_order() {
+        let mut layer_slots: SlotMap<LayerKey, ()> = SlotMap::with_key();
+        let layers: Vec<LayerKey> = (0..6).map(|_| layer_slots.insert(())).collect();
+        let mut rng = Rng(0x2545_f491_4f6c_dd1d);
+
+        let mut map = PortMap::new();
+        // Names, the bus indices of each name, and the layers of each port, in first-seen order.
+        type Bus = Vec<(usize, Vec<LayerKey>)>;
+        let mut expected: Vec<(ArcStr, Bus)> = Vec::new();
+        for _ in 0..200 {
+            let name = ArcStr::from(format!("p{}", rng.below(20)));
+            let index = rng.below(8) as usize;
+            let layer = layers[rng.below(layers.len() as u64) as usize];
+            map.add_port_with_strategy(
+                CellPort::with_shape(PortId::new(name.clone(), index), layer, rng.rect(50)),
+                PortConflictStrategy::Merge,
+            )
+            .unwrap();
+
+            let bus = match expected.iter().position(|(n, _)| *n == name) {
+                Some(i) => &mut expected[i].1,
+                None => {
+                    expected.push((name, Vec::new()));
+                    &mut expected.last_mut().unwrap().1
+                }
+            };
+            let port_layers = match bus.iter().position(|(i, _)| *i == index) {
+                Some(i) => &mut bus[i].1,
+                None => {
+                    bus.push((index, Vec::new()));
+                    &mut bus.last_mut().unwrap().1
+                }
+            };
+            if !port_layers.contains(&layer) {
+                port_layers.push(layer);
+            }
+        }
+
+        let expected: Vec<(ArcStr, usize, Vec<LayerKey>)> = expected
+            .into_iter()
+            .flat_map(|(name, bus)| {
+                bus.into_iter()
+                    .map(move |(index, layers)| (name.clone(), index, layers))
+            })
+            .collect();
+        let actual: Vec<(ArcStr, usize, Vec<LayerKey>)> = map
+            .ports()
+            .map(|port| (port.id.name(), port.id.index(), port.layers().collect()))
+            .collect();
+        assert_eq!(actual, expected);
     }
 
     #[test]
